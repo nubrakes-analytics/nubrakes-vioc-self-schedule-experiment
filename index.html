@@ -11,7 +11,7 @@
   --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
   --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
   --s1:#2a78d6; --s2:#eb6834;
-  --seq-1:#86b6ef; --seq-2:#6da7ec; --seq-3:#3987e5; --seq-4:#256abf; --seq-5:#184f95;
+  --seq-1:#86b6ef; --seq-2:#6da7ec; --seq-3:#5598e7; --seq-4:#3987e5; --seq-5:#256abf; --seq-6:#184f95;
   --good:#0ca30c; --warn:#fab219; --crit:#d03b3b; --unknown:#c3c2b7;
   --up:#006300; --down:#d03b3b;
   --chip-up:rgba(12,163,12,.10); --chip-down:rgba(208,59,59,.10); --chip-flat:rgba(11,11,11,.05);
@@ -24,7 +24,7 @@
     --ink:#fff; --ink-2:#c3c2b7; --muted:#898781;
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
     --s1:#3987e5; --s2:#d95926;
-    --seq-1:#86b6ef; --seq-2:#6da7ec; --seq-3:#3987e5; --seq-4:#256abf; --seq-5:#184f95;
+    --seq-1:#86b6ef; --seq-2:#6da7ec; --seq-3:#5598e7; --seq-4:#3987e5; --seq-5:#256abf; --seq-6:#184f95;
     --unknown:#6b6a66;
     --up:#0ca30c; --down:#d03b3b;
     --chip-up:rgba(12,163,12,.16); --chip-down:rgba(208,59,59,.16); --chip-flat:rgba(255,255,255,.06);
@@ -36,7 +36,7 @@
   --ink:#fff; --ink-2:#c3c2b7; --muted:#898781;
   --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
   --s1:#3987e5; --s2:#d95926;
-  --seq-1:#86b6ef; --seq-2:#6da7ec; --seq-3:#3987e5; --seq-4:#256abf; --seq-5:#184f95;
+  --seq-1:#86b6ef; --seq-2:#6da7ec; --seq-3:#5598e7; --seq-4:#3987e5; --seq-5:#256abf; --seq-6:#184f95;
   --unknown:#6b6a66;
   --up:#0ca30c; --down:#d03b3b;
   --chip-up:rgba(12,163,12,.16); --chip-down:rgba(208,59,59,.16); --chip-flat:rgba(255,255,255,.06);
@@ -252,12 +252,19 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
       </div>
     </div>
     <div class="card">
-      <h2>Lead-form progression (exposed group)</h2>
-      <p class="sub">How far into the intent-aware form each lead got, and what the leads that reached
-        each step went on to do.</p>
-      <div class="chart" id="formFunnelChart"></div>
-      <div class="tbl-scroll" style="margin-top:6px"><table id="formStages"></table></div>
-      <div class="note" id="formNote"></div>
+      <h2>Lead-form progression: symptoms reported</h2>
+      <p class="sub" id="yesSub"></p>
+      <div class="chart" id="yesFunnelChart"></div>
+      <div class="tbl-scroll" style="margin-top:6px"><table id="yesStages"></table></div>
+      <div class="note" id="yesNote"></div>
+    </div>
+    <div class="card">
+      <h2>Lead-form progression: no symptoms reported</h2>
+      <p class="sub" id="noSub"></p>
+      <div class="chart" id="noFunnelChart"></div>
+      <div class="tbl-scroll" style="margin-top:6px"><table id="noStages"></table></div>
+      <div class="note" id="noNote"></div>
+    </div>
     </div>
     <div class="card">
       <h2>Where every exposed lead sits right now</h2>
@@ -948,18 +955,52 @@ function jobStages(rows) {
   ];
 }
 
-/* Form progression, exposed group only. Ends at repair intent: booking is NOT
-   nested inside it, because leads reach the scheduler without form answers. */
-function formStages(rows) {
-  const answered = rows.filter(answeredForm);
-  const noSymptoms = answered.filter(r => !r.symptoms);
+/* The form forks on the symptoms answer, so each branch gets its own ladder.
+   Rows marked `branch` sit off the main chain and name their own parent count. */
+function symptomsYesStages(rows) {
+  const yes = rows.filter(r => r.symptoms);
+  const intent = yes.filter(r => r.intent);
+  const booked = yes.filter(r => r.booked);
+  const sub = k => ({
+    label: INTENT_LABEL[k], rows: intent.filter(r => r.intent === k),
+    note: `viocRepairIntent = ${k}`, branch: true, slice: true, indent: 1, baseCount: intent.length
+  });
   return [
-    { label: 'Exposed leads', rows, note: 'cohort 2' },
-    { label: 'Form viewed', rows: rows.filter(r => r.viewed), note: 'first_viewed_date' },
-    { label: 'Answered a form question', rows: answered, note: 'symptoms, mileage or intent captured' },
-    { label: 'Reached mileage + last repair', rows: noSymptoms.filter(r => r.reachedOfframp),
-      note: 'no-symptoms branch only', branch: true },
-    { label: 'Stated repair intent', rows: rows.filter(r => r.intent), note: 'viocRepairIntent' }
+    { label: 'Reported symptoms', rows: yes, note: 'viocSymptoms = true' },
+    { label: 'Stated repair intent', rows: intent, note: 'after the "what\'s going on?" step' },
+    sub('ready-to-fix'), sub('open'), sub('inspection-only'),
+    { label: 'Booked an appointment', rows: booked, note: 'is_booked' },
+    { label: 'Kept the appointment', rows: booked.filter(r => !r.canceled), note: 'not canceled' },
+    { label: 'Inspection completed', rows: yes.filter(r => r.inspected), note: 'received_inspection' },
+    { label: 'Repair completed', rows: yes.filter(r => r.completed), note: 'invoiced above $0' }
+  ];
+}
+
+function symptomsNoStages(rows) {
+  const no = rows.filter(r => !r.symptoms);
+  const reached = no.filter(r => r.reachedOfframp);
+  const offered = reached.filter(r => r.offered);
+  const took = offered.filter(r => r.deferred);
+  const notOffered = reached.filter(r => !r.offered);
+  const booked = no.filter(r => r.booked);
+  return [
+    { label: 'No symptoms reported', rows: no, note: 'viocSymptoms = false' },
+    { label: 'Answered mileage + last repair', rows: reached, note: 'both questions captured',
+      branch: true, indent: 1, baseCount: no.length },
+    { label: 'Offered the off-ramp', rows: offered, note: 'mi-1/2/3 and br-1/2',
+      branch: true, slice: true, indent: 2, baseCount: reached.length },
+    { label: 'Took the deferral', rows: took, note: "deferredAt, source 'vioc-off-ramp'",
+      branch: true, slice: true, indent: 3, baseCount: offered.length },
+    { label: 'Declined, continued', rows: offered.filter(r => !r.deferred), note: 'scheduled anyway or dropped',
+      branch: true, slice: true, indent: 3, baseCount: offered.length },
+    { label: 'Not offered, continued', rows: notOffered, note: 'went on to the intent question',
+      branch: true, slice: true, indent: 2, baseCount: reached.length },
+    { label: 'Stated repair intent', rows: no.filter(r => r.intent), note: 'viocRepairIntent',
+      branch: true, indent: 1, baseCount: no.length },
+    { label: 'Booked an appointment', rows: booked, note: 'is_booked' },
+    { label: 'Kept the appointment', rows: booked.filter(r => !r.canceled), note: 'not canceled' },
+    { label: 'Inspection completed', rows: no.filter(r => r.inspected), note: 'received_inspection' },
+    { label: 'Repair completed', rows: no.filter(r => r.completed), note: 'invoiced above $0' }
   ];
 }
 
@@ -977,7 +1018,7 @@ const POSITIONS = [
 ];
 const positionOf = r => POSITIONS.find(p => p.test(r)).label;
 
-const SEQ = ['var(--seq-1)', 'var(--seq-2)', 'var(--seq-3)', 'var(--seq-4)', 'var(--seq-5)'];
+const SEQ = ['var(--seq-1)', 'var(--seq-2)', 'var(--seq-3)', 'var(--seq-4)', 'var(--seq-5)', 'var(--seq-6)'];
 
 /* A branch stage sits off the main path, so the drop-off chain skips over it rather
    than differencing against it - which is what produced a negative drop-off. */
@@ -985,28 +1026,33 @@ function stageRows(stages) {
   let prevMain = null;
   return stages.map(st => {
     const n = st.rows.length;
-    const base = st.branch ? null : prevMain;
+    const base = st.baseCount !== undefined ? st.baseCount
+      : st.branch ? null : prevMain;
     if (!st.branch) prevMain = n;
     return { st, n, base };
   });
 }
 
-const dropCell = (n, base, branch) =>
-  branch ? '<span class="chip">branch</span>'
-  : base === null ? dash
+const dropCell = (n, base, st) =>
+  st && st.slice ? `<span class="chip">${pct(base ? n / base : 0, 0)} of parent</span>`
+  : base === null ? (st && st.branch ? '<span class="chip">branch</span>' : dash)
   : base - n === 0 ? '<span class="chip">no drop</span>'
   : `<span class="chip down">−${num(base - n)} · ${pct((base - n) / base, 0)}</span>`;
+
+const stageLabel = st =>
+  `<span${st.indent ? ` style="padding-left:${st.indent * 14}px"` : ''}>${st.indent ? '↳ ' : ''}${st.label}</span>` +
+  `<div class="small muted"${st.indent ? ` style="padding-left:${st.indent * 14}px"` : ''}>${st.note}</div>`;
 
 /* Nested funnel: every stage contains all deeper ones, so per-stage outcome counts
    would just repeat the terminal totals. Step conversion is what carries meaning. */
 function nestedStageTable(stages, total) {
   return tableHTML(['Stage', 'Reached', '% of leads', 'Step conversion', 'Drop-off from previous'],
     stageRows(stages).map(({ st, n, base }) => [
-      `${st.label}<div class="small muted">${st.note}</div>`,
+      stageLabel(st),
       `<strong>${num(n)}</strong>`,
       pct(total ? n / total : 0, 0),
       base === null ? dash : `<span class="chip${base && n / base >= 0.5 ? ' up' : ''}">${pct(base ? n / base : 0, 0)}</span>`,
-      dropCell(n, base, st.branch)
+      dropCell(n, base, st)
     ]));
 }
 
@@ -1017,10 +1063,10 @@ function outcomeStageTable(stages, total) {
     stageRows(stages).map(({ st, n, base }) => {
       const m = metrics(st.rows);
       return [
-        `${st.label}<div class="small muted">${st.note}</div>`,
+        stageLabel(st),
         `<strong>${num(n)}</strong>`,
         pct(total ? n / total : 0, 0),
-        dropCell(n, base, st.branch),
+        dropCell(n, base, st),
         num(m.booked), pct(m.bookingRate), num(m.inspected), num(m.completed),
         pct(m.conversionRate), money(m.revenue), m.payingJobs ? money(m.aov) : dash
       ];
@@ -1053,27 +1099,42 @@ function renderFunnel(s, E, C) {
   $('#jobStagesExp').innerHTML = nestedStageTable(je, exp.length);
   $('#jobStagesCtl').innerHTML = nestedStageTable(jc, ctl.length);
 
-  /* --- form funnel, exposed only --- */
-  const fs = formStages(exp);
-  draw($('#formFunnelChart'), hBars({
-    items: fs.map(st => ({ label: st.label, value: st.rows.length, st })),
-    colors: SEQ, fmt: num, labelW: 215,
+  /* --- the form forks on symptoms; one ladder per branch --- */
+  const yes = exp.filter(r => r.symptoms), no = exp.filter(r => !r.symptoms);
+  const ys = symptomsYesStages(exp), ns = symptomsNoStages(exp);
+
+  const ladder = (mount, stages, base) => draw($(mount), hBars({
+    items: stages.filter(st => !st.branch).map(st => ({ label: st.label, value: st.rows.length, st })),
+    colors: SEQ, fmt: num, labelW: 190,
     tip: d => tipRow('Leads reaching stage', num(d.value)) +
-      tipRow('Share of exposed', pct(exp.length ? d.value / exp.length : 0)) +
-      tipRow('Booked', num(metrics(d.st.rows).booked)) +
+      tipRow('Share of branch', pct(base ? d.value / base : 0)) +
       tipRow('Revenue', money(metrics(d.st.rows).revenue))
   }));
-  $('#formStages').innerHTML = outcomeStageTable(fs, exp.length);
+  ladder('#yesFunnelChart', ys, yes.length);
+  ladder('#noFunnelChart', ns, no.length);
+  $('#yesStages').innerHTML = outcomeStageTable(ys, yes.length);
+  $('#noStages').innerHTML = outcomeStageTable(ns, no.length);
 
+  const ym = metrics(yes), nm = metrics(no);
+  $('#yesSub').textContent =
+    `${num(yes.length)} leads · ${pct(exp.length ? yes.length / exp.length : 0, 0)} of exposed · ` +
+    `${pct(ym.bookingRate, 0)} book, ${pct(ym.conversionRate)} reach a completed repair`;
+  $('#noSub').textContent =
+    `${num(no.length)} leads · ${pct(exp.length ? no.length / exp.length : 0, 0)} of exposed · ` +
+    `${pct(nm.bookingRate, 0)} book, ${pct(nm.conversionRate)} reach a completed repair`;
+
+  const skipped = no.filter(r => r.intent && !r.reachedOfframp).length;
+  $('#yesNote').innerHTML =
+    `Every lead on this branch that answered the symptoms question went on to state an intent and book —
+     the flow does not reach the scheduler any other way. Drop-off starts only after the appointment is made.`;
   const bypass = exp.filter(r => r.booked && !answeredForm(r));
-  const bm = metrics(bypass), fm = metrics(exp.filter(r => r.booked && answeredForm(r)));
-  $('#formNote').innerHTML =
-    `<strong>Booking is not nested inside the form funnel.</strong>
-     ${num(bypass.length)} of ${num(metrics(exp).booked)} booked exposed leads reached the scheduler with
-     no form answer captured at all — so the form ladder above stops at repair intent rather than
-     pretending booking flows out of it. Those leads convert at ${pct(bm.conversionRate)} against
-     ${pct(fm.conversionRate)} for booked leads that did answer, on
-     ${money(bm.revenue)} vs ${money(fm.revenue)} of revenue.`;
+  $('#noNote').innerHTML =
+    (skipped ? `<strong>${num(skipped)} leads on this branch stated a repair intent without ever answering
+      the mileage and last-repair questions</strong>, which the described flow says cannot happen — so
+      "stated repair intent" is a branch row here rather than a step below mileage. Worth checking against
+      the live form logic. ` : '') +
+    `Separately, ${num(bypass.length)} exposed leads booked with no form answer captured at all, which is
+     why booking is measured from the top of the branch and not from the intent step.`;
 
   /* --- where every lead sits right now --- */
   /* POSITIONS stays deepest-first so first-match classification keeps working;
