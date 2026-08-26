@@ -1,1 +1,1521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VIOC Self-Schedule Experiment</title>
+<style>
+:root{
+  color-scheme:light;
+  --surface-1:#fcfcfb; --plane:#f9f9f7;
+  --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
+  --s1:#2a78d6; --s2:#eb6834;
+  --seq-1:#86b6ef; --seq-2:#5598e7; --seq-3:#2a78d6; --seq-4:#1c5cab;
+  --good:#0ca30c; --warn:#fab219; --crit:#d03b3b; --unknown:#c3c2b7;
+  --up:#006300; --down:#d03b3b;
+  --chip-up:rgba(12,163,12,.10); --chip-down:rgba(208,59,59,.10); --chip-flat:rgba(11,11,11,.05);
+  --radius:12px;
+}
+@media (prefers-color-scheme:dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme:dark;
+    --surface-1:#1a1a19; --plane:#0d0d0d;
+    --ink:#fff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926;
+    --seq-1:#6da7ec; --seq-2:#3987e5; --seq-3:#256abf; --seq-4:#184f95;
+    --unknown:#6b6a66;
+    --up:#0ca30c; --down:#d03b3b;
+    --chip-up:rgba(12,163,12,.16); --chip-down:rgba(208,59,59,.16); --chip-flat:rgba(255,255,255,.06);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --surface-1:#1a1a19; --plane:#0d0d0d;
+  --ink:#fff; --ink-2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+  --s1:#3987e5; --s2:#d95926;
+  --seq-1:#6da7ec; --seq-2:#3987e5; --seq-3:#256abf; --seq-4:#184f95;
+  --unknown:#6b6a66;
+  --up:#0ca30c; --down:#d03b3b;
+  --chip-up:rgba(12,163,12,.16); --chip-down:rgba(208,59,59,.16); --chip-flat:rgba(255,255,255,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--plane);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}
+.wrap{max-width:1240px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:21px;margin:0;letter-spacing:-.01em}
+h2{font-size:14px;margin:0 0 2px;font-weight:650}
+.sub{color:var(--ink-2);font-size:12.5px;margin:4px 0 0}
+.head{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.headbtns{display:flex;gap:8px;align-items:center}
+button,select,input[type=date]{font:inherit;color:var(--ink);background:var(--surface-1);
+  border:1px solid var(--border);border-radius:8px;padding:6px 10px}
+button{cursor:pointer}
+button:hover,select:hover{border-color:var(--axis)}
+.status{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--ink-2)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:20px;
+  border:1px solid var(--border);background:var(--surface-1);font-weight:600}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--good);flex:none}
+.dot.stale{background:var(--warn)}
+.dot.err{background:var(--crit)}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:18px 0 0;
+  padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius)}
+.field{display:flex;flex-direction:column;gap:4px}
+.field[hidden],[hidden]{display:none}
+.field label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+.tabs{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--border);margin:18px 0 16px}
+.tab{border:0;border-bottom:2px solid transparent;background:none;border-radius:0;
+  padding:9px 15px;font-size:13px;font-weight:650;color:var(--muted);white-space:nowrap}
+.tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink)}
+.panel[hidden]{display:none}
+.card{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px 18px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.tile .label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+.tile .value{font-size:26px;font-weight:680;margin:6px 0 8px;letter-spacing:-.02em}
+.tile .value.hero{font-size:48px;line-height:1;margin:8px 0 10px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:16px;
+  font-size:11px;font-weight:650;background:var(--chip-flat);color:var(--ink-2)}
+.chip.up{background:var(--chip-up);color:var(--up)}
+.chip.down{background:var(--chip-down);color:var(--down)}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--chip-flat)}
+.tbl-scroll{overflow-x:auto}
+.note{margin-top:12px;padding:9px 12px;border-left:2px solid var(--s1);border-radius:0 6px 6px 0;
+  background:var(--chip-flat);color:var(--ink-2);font-size:12px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:2px 0 10px;font-size:12px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.key{width:10px;height:10px;border-radius:3px;flex:none}
+.chart{width:100%}
+.muted{color:var(--muted)}
+.small{font-size:12px;color:var(--ink-2)}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:var(--surface-1);color:var(--ink-2);
+  padding:6px 11px;font-size:12px;font-weight:600}
+.seg button[aria-pressed=true]{background:var(--s1);color:#fff}
+#tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .09s;z-index:50;
+  background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:8px 10px;
+  font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.14);max-width:260px}
+#tip b{display:block;margin-bottom:4px;font-size:12px}
+#tip .row{display:flex;gap:10px;justify-content:space-between;align-items:center}
+#tip .row span:last-child{font-variant-numeric:tabular-nums;font-weight:650}
+#banner{display:none;margin:14px 0;padding:11px 14px;border-radius:var(--radius);
+  border:1px solid var(--crit);background:var(--chip-down);color:var(--ink);font-size:13px}
+#banner.show{display:block}
+.loading{padding:40px;text-align:center;color:var(--muted)}
+a{color:var(--s1)}
+.rawbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 12px}
+.rawbar .spacer{flex:1}
+.rawbar input[type=search]{min-width:230px;flex:0 1 300px}
+.tbl-scroll.tall{max-height:62vh;overflow:auto}
+.tall thead th{position:sticky;top:0;z-index:2;background:var(--surface-1);
+  box-shadow:inset 0 -1px 0 var(--border)}
+.raw th,.raw td{text-align:left}
+.raw th.n,.raw td.n{text-align:right}
+.raw th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+.raw th.sortable:hover{color:var(--ink)}
+.raw td{white-space:nowrap}
+.raw tbody td{font-size:12.5px}
+.find{display:inline-flex;align-items:center;gap:5px}
+.find i{width:8px;height:8px;border-radius:50%;flex:none}
+.pager{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:12px;
+  font-size:12px;color:var(--ink-2)}
+.pager button[disabled]{opacity:.4;cursor:default}
+h3{font-size:13px;margin:0 0 10px;font-weight:650}
+.ctlrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.ctlrow .spacer{flex:1}
+.note code{font-size:11.5px;background:var(--chip-flat);padding:1px 5px;border-radius:4px}
+.note.crit{border-left-color:var(--crit)}
+.card.warn{border-color:var(--crit)}
+@media (max-width:1000px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.split{grid-template-columns:1fr}}
+@media (max-width:620px){.wrap{padding:14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tile .value{font-size:22px}.tile .value.hero{font-size:36px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <div>
+      <h1>VIOC Self-Schedule Experiment</h1>
+      <p class="sub">Cohort 2 = Experiment · live from Redash query 1621</p>
+      <div class="status" id="status">
+        <span class="pill"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></span>
+        <span id="statusDetail"></span>
+      </div>
+    </div>
+    <div class="headbtns">
+      <button id="refresh" title="Re-pull the query from Redash">Refresh data</button>
+      <button id="theme" title="Toggle light / dark">Dark</button>
+    </div>
+  </header>
 
+  <div id="banner"></div>
+
+  <div class="filters">
+    <div class="field">
+      <label for="fRange">Date range</label>
+      <select id="fRange">
+        <option value="aug">August 2026</option>
+        <option value="l7">Last 7 days</option>
+        <option value="l30">Last 30 days</option>
+        <option value="l90">Last 90 days</option>
+        <option value="all">Full experiment</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </div>
+    <div class="field" id="customWrap" hidden>
+      <label for="fStart">From</label>
+      <input type="date" id="fStart">
+    </div>
+    <div class="field" id="customWrap2" hidden>
+      <label for="fEnd">To</label>
+      <input type="date" id="fEnd">
+    </div>
+    <div class="field">
+      <label for="fMarket">Market</label>
+      <select id="fMarket"><option value="ALL">All markets</option></select>
+    </div>
+    <div class="field">
+      <label for="fControl">Control group</label>
+      <select id="fControl">
+        <option value="all">All non-cohort-2 leads</option>
+        <option value="notexposed">NOT EXPOSED only</option>
+        <option value="exposed">Exposed cohorts only (1 / preview-1)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button id="reset">Reset</button>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+    <button class="tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button class="tab" role="tab" data-tab="cohorts" aria-selected="false">Cohorts</button>
+    <button class="tab" role="tab" data-tab="trend" aria-selected="false">Trend</button>
+    <button class="tab" role="tab" data-tab="segments" aria-selected="false">Segments</button>
+    <button class="tab" role="tab" data-tab="offramp" aria-selected="false">Off-ramp</button>
+    <button class="tab" role="tab" data-tab="findings" aria-selected="false">Findings</button>
+    <button class="tab" role="tab" data-tab="markets" aria-selected="false">Markets</button>
+    <button class="tab" role="tab" data-tab="raw" aria-selected="false">Raw data</button>
+  </nav>
+
+  <div id="app"><div class="loading">Pulling fresh results from Redash…</div></div>
+  <div class="card" id="empty" hidden>
+    <h2>No leads in this selection</h2>
+    <p class="sub" id="emptyMsg"></p>
+  </div>
+
+  <section class="panel" id="p-overview" hidden>
+    <div class="grid" id="tiles"></div>
+    <div class="card">
+      <h2>Headline rates: Experiment vs Control</h2>
+      <p class="sub" id="ratesSub"></p>
+      <div class="legend" id="ratesLegend"></div>
+      <div class="chart" id="ratesChart"></div>
+    </div>
+    <div class="card">
+      <h2>Executive scorecard</h2>
+      <div class="tbl-scroll"><table id="scorecard"></table></div>
+      <div class="note"><strong>Definitions:</strong> booking / conversion / self-booked rates are per lead.
+        Cancel rate = canceled ÷ booked. A job that was performed (<em>inspected</em>) either sells a repair
+        (<em>completed</em>, always invoiced above $0) or closes at $0 — so <strong>inspected = completed +
+        $0 jobs</strong>, and the $0 rate is measured against jobs performed. Revenue and AOV count the
+        completed side only.</div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-cohorts" hidden>
+    <div class="card">
+      <h2>Every cohort, same metric set</h2>
+      <p class="sub">Cohort 2 is the only group served the intent-aware lead form. Cohorts 1 and preview-1
+        were exposed to earlier stages of the rollout and carry no form answers.</p>
+      <div class="tbl-scroll"><table id="cohortTable"></table></div>
+    </div>
+    <div class="card">
+      <h2>Staged launch: cohort mix by market</h2>
+      <p class="sub">Lead counts and each cohort's share of that market, for the selected range.</p>
+      <div class="tbl-scroll"><table id="stagingTable"></table></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-trend" hidden>
+    <div class="card">
+      <h2>Monthly and weekly view</h2>
+      <p class="sub">Bucketed on lead date. The most recent bucket is always partial — leads booked in it
+        have not finished their jobs yet, so every downstream rate understates.</p>
+      <div class="ctlrow">
+        <div class="seg" id="trendGrain"></div>
+        <div class="seg" id="trendMetricSeg"></div>
+      </div>
+      <div class="legend" id="trendLegend"></div>
+      <div class="chart" id="trendChart"></div>
+      <div class="ctlrow" style="margin-top:16px">
+        <span class="small" id="trendTableCap"></span>
+        <span class="spacer"></span>
+        <select id="trendGroupSel">
+          <option value="exp">Experiment (cohort 2)</option>
+          <option value="ctl">Control</option>
+        </select>
+      </div>
+      <div class="tbl-scroll"><table id="trendTable"></table></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-segments" hidden>
+    <div class="card">
+      <h2>Segmentation of the exposed group</h2>
+      <p class="sub" id="segSub"></p>
+    </div>
+    <div class="card">
+      <h3>1 · Symptoms reported</h3>
+      <div class="tbl-scroll"><table id="segSymptoms"></table></div>
+      <div class="note" id="segSymptomsNote"></div>
+    </div>
+    <div class="card">
+      <h3>2 · Off-ramp offered, and who took it</h3>
+      <div class="tbl-scroll"><table id="segOfframp"></table></div>
+      <div class="note" id="segOfframpNote"></div>
+    </div>
+    <div class="card">
+      <h3>3 · Self-booked vs ISA-booked</h3>
+      <div class="tbl-scroll"><table id="segSource"></table></div>
+      <div class="note" id="segSourceNote"></div>
+    </div>
+    <div class="card">
+      <h3>4 · Stated repair intent</h3>
+      <div class="chart" id="intentChart"></div>
+      <div class="tbl-scroll" style="margin-top:6px"><table id="segIntent"></table></div>
+      <div class="note" id="segIntentNote"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-offramp" hidden>
+    <div class="split">
+      <div class="card">
+        <h2>Who reaches the off-ramp</h2>
+        <div class="tbl-scroll"><table id="offrampFunnel"></table></div>
+      </div>
+      <div class="card">
+        <h2>Deferral take-up, both denominators</h2>
+        <div class="tbl-scroll"><table id="offrampTakeup"></table></div>
+        <div class="note" id="offrampNote"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>What happened next</h2>
+      <div class="tbl-scroll"><table id="offrampOutcome"></table></div>
+    </div>
+    <div class="card">
+      <h2>Leads that took the deferral</h2>
+      <div class="tbl-scroll"><table id="deferralTable"></table></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-findings" hidden>
+    <div class="card">
+      <h2>Inspection findings by group</h2>
+      <p class="sub">Completed inspections only. Outcome is the recommendation recorded against the job.</p>
+      <div class="legend" id="findingsLegend"></div>
+      <div class="chart" id="findingsChart"></div>
+      <div class="tbl-scroll" style="margin-top:12px"><table id="findingsGroup"></table></div>
+    </div>
+    <div class="card warn">
+      <div class="note crit" id="findingsWarn"></div>
+    </div>
+    <div class="card">
+      <h2>Findings by segment (exposed group)</h2>
+      <div class="tbl-scroll"><table id="findingsSeg"></table></div>
+    </div>
+    <div class="card">
+      <h2>Repair conversion off each finding</h2>
+      <div class="tbl-scroll"><table id="findingsConv"></table></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-markets" hidden>
+    <div class="card">
+      <h2>AOV by market (Experiment)</h2>
+      <div class="chart" id="marketChart"></div>
+    </div>
+    <div class="card">
+      <h2>Market detail</h2>
+      <div class="tbl-scroll"><table id="marketTable"></table></div>
+      <p class="small" style="margin:10px 0 0">Markets with fewer than 30 experiment leads in the selected
+        range are marked <span class="muted">(small n)</span>.</p>
+    </div>
+  </section>
+
+  <section class="panel" id="p-raw" hidden>
+    <div class="card">
+      <h2>Raw data</h2>
+      <p class="sub" id="rawSub"></p>
+      <div class="rawbar">
+        <input id="rawSearch" type="search" placeholder="Search market, status, finding, id…" autocomplete="off">
+        <select id="rawGroup">
+          <option value="both">Experiment + Control</option>
+          <option value="exp">Experiment only</option>
+          <option value="ctl">Control only</option>
+          <option value="everything">Everything in range</option>
+        </select>
+        <span class="small" id="rawCount"></span>
+        <span class="spacer"></span>
+        <button id="exportView">Export view (CSV)</button>
+        <button id="exportFull">Export all columns (CSV)</button>
+      </div>
+      <div class="tbl-scroll tall"><table id="rawTable" class="raw"></table></div>
+      <div class="pager" id="rawPager"></div>
+    </div>
+  </section>
+</div>
+<div id="tip" role="tooltip"></div>
+<script>
+/* VIOC Self-Schedule experiment dashboard.
+   Data is pulled fresh from /api/data.csv (a live Redash proxy) on every page load.
+   All metrics are computed in the browser so the filters are instant. */
+
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+/* ---------------------------------------------------------------- parsing */
+
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  const rows = [];
+  let row = [], field = '', i = 0, quoted = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        quoted = false; i++; continue;
+      }
+      field += c; i++; continue;
+    }
+    if (c === '"') { quoted = true; i++; continue; }
+    if (c === ',') { row.push(field); field = ''; i++; continue; }
+    if (c === '\r') { i++; continue; }
+    if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+    field += c; i++;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  const header = rows.shift().map(h => h.trim());
+  return rows.filter(r => r.length > 1).map(r => {
+    const o = {};
+    header.forEach((h, j) => { o[h] = (r[j] ?? '').trim(); });
+    return o;
+  });
+}
+
+/* Form answer codes, per the lead-form spec. */
+const INTENT_LABEL = {
+  'ready-to-fix': 'Ready to fix it',
+  'open': "Open to it — let's see",
+  'inspection-only': 'Inspection only for now',
+  '': 'Not answered'
+};
+const MILEAGE_LABEL = {
+  'mi-1': '50–75k miles', 'mi-2': '75–100k miles', 'mi-3': '100–150k miles',
+  'mi-4': '150k+ miles', 'mi-5': 'Not sure', '': 'Not answered'
+};
+const REPAIR_LABEL = {
+  'br-1': 'Within the last year', 'br-2': '1–2 years ago', 'br-3': '3+ years ago',
+  'br-4': 'Not sure', '': 'Not answered'
+};
+
+/* Off-ramp offered, per spec: no symptoms, lower mileage, serviced recently. */
+const OFFRAMP_MILEAGE = ['mi-1', 'mi-2', 'mi-3'];
+const OFFRAMP_REPAIR  = ['br-1', 'br-2'];
+
+/* The CSV feed types everything as strings; the published JSON feed uses real booleans,
+   numbers and " 00:00:00"-suffixed dates. Coerce so one normalizer serves both. */
+const asBool = v => v === true || v === 'true';
+const asNum  = v => Number(v) || 0;
+const asDate = v => String(v ?? '').slice(0, 10);
+const asStr  = v => (v === null || v === undefined) ? '' : String(v);
+
+function normalize(o) {
+  const symptoms   = asBool(o.viocsymptoms);
+  const mileage    = asStr(o.viocmileagerange);
+  const lastRepair = asStr(o.vioclastbrakerepair);
+  const booked     = asNum(o.is_booked);
+  const selfBooked = asBool(o.appointment_self_booked);
+  const revenue    = asNum(o.revenue);
+  const completed  = asNum(o.is_completed);
+  return {
+    raw: o,
+    id: asStr(o.inquiry_request_id),
+    date: asDate(o.lead_date_cst),
+    market: asStr(o.market) || 'Unknown',
+    cohort: asStr(o.experiment_cohort),
+    isExp: asStr(o.experiment_cohort) === '2',
+    symptoms, mileage, lastRepair,
+    intent: asStr(o.viocrepairintent),
+    selfBooked,
+    booked,
+    canceled: asNum(o.is_canceled),
+    completed,
+    inspected: asNum(o.received_inspection),
+    revenue,
+    zeroJob: asNum(o.received_inspection) === 1 && revenue <= 0,
+    /* answered both post-symptom questions, i.e. reached the off-ramp decision point */
+    reachedOfframp: !symptoms && !!mileage && !!lastRepair,
+    offered: !symptoms && OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair),
+    deferred: asStr(o.deferralsource) === 'vioc-off-ramp' && !!asDate(o.deferred_date_cst),
+    deferralSource: asStr(o.deferralsource),
+    deferredDate: asDate(o.deferred_date_cst),
+    bookingSource: booked ? (selfBooked ? 'Self-booked' : 'ISA-booked') : 'Not booked',
+    outcome: asStr(o.recommendation_outcome) || 'UNKNOWN / NOT RECORDED',
+    status: asStr(o.job_status),
+    appt: asDate(o.appointment_start_date_cst),
+    link: asStr(o.job_link)
+  };
+}
+
+/* --------------------------------------------------------------- metrics */
+
+function metrics(rows) {
+  const m = { leads: rows.length, booked: 0, canceled: 0, completed: 0, inspected: 0,
+              revenue: 0, payingJobs: 0, zeroJobs: 0, selfBooked: 0, isaBooked: 0,
+              sympYes: 0, offered: 0, deferred: 0 };
+  for (const r of rows) {
+    m.booked += r.booked; m.canceled += r.canceled;
+    m.completed += r.completed; m.inspected += r.inspected;
+    if (r.selfBooked) m.selfBooked++;
+    else if (r.booked) m.isaBooked++;
+    if (r.symptoms) m.sympYes++;
+    if (r.offered) m.offered++;
+    if (r.deferred) m.deferred++;
+    if (r.completed && r.revenue > 0) { m.revenue += r.revenue; m.payingJobs++; }
+    if (r.zeroJob) m.zeroJobs++;
+  }
+  const n = m.leads;
+  m.sympNo          = n - m.sympYes;
+  m.notBooked       = n - m.booked;
+  m.bookingRate     = n ? m.booked / n : 0;
+  m.cancelRate      = m.booked ? m.canceled / m.booked : 0;
+  m.inspectionRate  = n ? m.inspected / n : 0;
+  m.conversionRate  = n ? m.completed / n : 0;
+  m.selfBookedRate  = n ? m.selfBooked / n : 0;
+  m.sympYesRate     = n ? m.sympYes / n : 0;
+  m.aov             = m.payingJobs ? m.revenue / m.payingJobs : 0;
+  m.zeroRate        = m.inspected ? m.zeroJobs / m.inspected : 0;
+  return m;
+}
+
+/* ------------------------------------------------------------ formatting */
+
+const pct   = (v, d = 1) => (100 * v).toFixed(d) + '%';
+const pp    = (v, d = 1) => (v >= 0 ? '+' : '−') + Math.abs(100 * v).toFixed(d) + 'pp';
+const money = v => '$' + Math.round(v).toLocaleString();
+const moneyD = v => (v >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(v)).toLocaleString();
+const num   = v => (v || 0).toLocaleString();
+const dash  = '<span class="muted">—</span>';
+const dlabel = d => {
+  if (!d) return '—';
+  const [y, mo, da] = d.split('-');
+  return new Date(+y, +mo - 1, +da).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+const mlabel = ym => {
+  const [y, mo] = ym.split('-');
+  return new Date(+y, +mo - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+};
+
+/* The arrow follows the number's sign; the colour follows whether that direction is good. */
+function chip(text, sign, good = sign) {
+  const cls = good === 0 ? '' : good > 0 ? ' up' : ' down';
+  const mark = sign === 0 ? '' : sign > 0 ? '▲ ' : '▼ ';
+  return `<span class="chip${cls}">${mark}${text}</span>`;
+}
+
+/* ---------------------------------------------------------------- state */
+
+const state = {
+  rows: [], markets: [], cohorts: [], minDate: '', maxDate: '', source: null,
+  range: 'aug', start: '', end: '', market: 'ALL', control: 'all',
+  tab: 'overview', trendMetric: 'conversionRate', trendGrain: 'week', trendGroup: 'exp',
+  fetchedAt: null,
+  rawQuery: '', rawGroup: 'both', rawSort: { key: 'date', dir: -1 }, rawPage: 0
+};
+
+function rangeBounds() {
+  const max = state.maxDate;
+  const shift = days => {
+    const d = new Date(max + 'T00:00:00');
+    d.setDate(d.getDate() - (days - 1));
+    return d.toISOString().slice(0, 10);
+  };
+  switch (state.range) {
+    case 'aug':    return ['2026-08-01', '2026-08-31'];
+    case 'l7':     return [shift(7), max];
+    case 'l30':    return [shift(30), max];
+    case 'l90':    return [shift(90), max];
+    case 'all':    return [state.minDate, max];
+    case 'custom': return [state.start || state.minDate, state.end || max];
+  }
+}
+
+function inControl(r) {
+  if (r.isExp) return false;
+  if (state.control === 'notexposed') return r.cohort === 'NOT EXPOSED';
+  if (state.control === 'exposed')    return r.cohort === '1' || r.cohort === 'preview-1';
+  return true;
+}
+
+function scoped() {
+  const [a, b] = rangeBounds();
+  const rows = state.rows.filter(r =>
+    r.date >= a && r.date <= b && (state.market === 'ALL' || r.market === state.market));
+  return { start: a, end: b, exp: rows.filter(r => r.isExp), ctl: rows.filter(inControl), all: rows };
+}
+
+/* ------------------------------------------------------------ svg charts */
+
+const NS = 'http://www.w3.org/2000/svg';
+const el = (t, a = {}) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+const text = (x, y, s, a = {}) => { const e = el('text', { x, y, ...a }); e.textContent = s; return e; };
+const AXIS_FONT = { 'font-size': 11, fill: 'var(--muted)', 'font-family': 'inherit' };
+const LBL_FONT  = { 'font-size': 12, fill: 'var(--ink-2)', 'font-family': 'inherit', 'font-weight': 600 };
+
+const colPath = (x, y, w, h, r) => {
+  r = Math.max(0, Math.min(r, w / 2, h));
+  return `M${x},${y + h}L${x},${y + r}Q${x},${y} ${x + r},${y}L${x + w - r},${y}Q${x + w},${y} ${x + w},${y + r}L${x + w},${y + h}Z`;
+};
+const rowPath = (x, y, w, h, r) => {
+  r = Math.max(0, Math.min(r, h / 2, w));
+  return `M${x},${y}L${x + w - r},${y}Q${x + w},${y} ${x + w},${y + r}L${x + w},${y + h - r}Q${x + w},${y + h} ${x + w - r},${y + h}L${x},${y + h}Z`;
+};
+
+const tipNode = () => $('#tip');
+function bindTip(node, html) {
+  node.style.cursor = 'default';
+  node.addEventListener('pointerenter', e => { const t = tipNode(); t.innerHTML = html; t.style.opacity = 1; moveTip(e); });
+  node.addEventListener('pointermove', moveTip);
+  node.addEventListener('pointerleave', () => { tipNode().style.opacity = 0; });
+}
+function moveTip(e) {
+  const t = tipNode(), r = t.getBoundingClientRect();
+  let x = e.clientX + 14, y = e.clientY + 16;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 16;
+  t.style.left = x + 'px'; t.style.top = y + 'px';
+}
+const tipRow = (label, value) => `<div class="row"><span>${label}</span><span>${value}</span></div>`;
+
+const charts = new Map();
+function draw(node, fn) { charts.set(node, { fn, w: 0 }); paint(node); }
+function paint(node) {
+  const rec = charts.get(node);
+  if (!rec) return;
+  const w = Math.max(300, node.clientWidth || 900);
+  if (Math.abs(w - rec.w) < 2) return;
+  rec.w = w;
+  node.replaceChildren(rec.fn(w));
+}
+const resizeObs = new ResizeObserver(entries => { for (const e of entries) if (e.contentRect.width > 0) paint(e.target); });
+
+/* axis ticks that land on round numbers (0 / 20% / 40% …), never 18.75% */
+function ticks(maxVal, count = 4) {
+  if (!(maxVal > 0)) return { max: 1, vals: [0, 0.25, 0.5, 0.75, 1] };
+  const raw = maxVal / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / mag;
+  const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+  const max = Math.ceil(maxVal / step - 1e-9) * step;
+  const vals = [];
+  for (let i = 0; i * step <= max + step / 1e6; i++) vals.push(i * step);
+  return { max, vals };
+}
+
+function groupedColumns({ cats, series, fmt, deltaFmt, tip }) {
+  return w => {
+    const h = 260, pad = { t: 14, r: 12, b: 44, l: 46 };
+    const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
+    const t = ticks(Math.max(...series.flatMap(s => s.vals), 0.0001));
+    const max = t.max;
+    const svg = el('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
+    const y = v => pad.t + ih - (v / max) * ih;
+    t.vals.forEach((v, i) => {
+      svg.appendChild(el('line', { x1: pad.l, x2: w - pad.r, y1: y(v), y2: y(v),
+        stroke: i ? 'var(--grid)' : 'var(--axis)', 'stroke-width': 1 }));
+      svg.appendChild(text(pad.l - 8, y(v) + 4, fmt(v), { ...AXIS_FONT, 'text-anchor': 'end' }));
+    });
+    const band = iw / cats.length;
+    const bw = Math.min(24, (band - 18) / series.length);
+    cats.forEach((c, i) => {
+      const cx = pad.l + band * i + band / 2;
+      const total = series.length * bw + 2 * (series.length - 1);
+      series.forEach((s, j) => {
+        const v = s.vals[i], x = cx - total / 2 + j * (bw + 2);
+        const bh = Math.max(1, (v / max) * ih);
+        const p = el('path', { d: colPath(x, pad.t + ih - bh, bw, bh, 4), fill: s.color });
+        bindTip(p, `<b>${c}</b>${tip(i, j)}`);
+        svg.appendChild(p);
+      });
+      svg.appendChild(text(cx, h - 22, c, { ...LBL_FONT, 'text-anchor': 'middle' }));
+      if (series.length === 2) {
+        const d = series[0].vals[i] - series[1].vals[i];
+        svg.appendChild(text(cx, h - 7, (deltaFmt || (v => (v >= 0 ? '+' : '−') + fmt(Math.abs(v))))(d) + ' vs control',
+          { ...AXIS_FONT, 'text-anchor': 'middle' }));
+      }
+    });
+    return svg;
+  };
+}
+
+function hBars({ items, fmt, color = 'var(--s1)', colors = null, tip, labelW = 150 }) {
+  return w => {
+    const rowH = 34, h = items.length * rowH + 14;
+    const pad = { t: 6, r: 74, l: labelW };
+    const iw = Math.max(40, w - pad.l - pad.r);
+    const max = Math.max(...items.map(d => d.value), 0.0001);
+    const svg = el('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
+    items.forEach((d, i) => {
+      const y = pad.t + i * rowH;
+      const bw = Math.max(2, (d.value / max) * iw);
+      svg.appendChild(text(0, y + 19, d.label, { ...LBL_FONT, fill: 'var(--ink)' }));
+      svg.appendChild(el('rect', { x: pad.l, y: y + 6, width: iw, height: 16, rx: 8, fill: 'var(--grid)' }));
+      const p = el('path', { d: rowPath(pad.l, y + 6, bw, 16, 4), fill: colors ? colors[i] : color });
+      bindTip(p, `<b>${d.label}</b>${tip(d)}`);
+      svg.appendChild(p);
+      svg.appendChild(text(pad.l + iw + 8, y + 19, fmt(d.value), { ...LBL_FONT, fill: 'var(--ink)' }));
+    });
+    return svg;
+  };
+}
+
+function stackedBars({ items, keys, fmt, labelW = 130 }) {
+  return w => {
+    const rowH = 46, h = items.length * rowH + 10;
+    const pad = { l: labelW, r: 14, t: 6 };
+    const iw = Math.max(60, w - pad.l - pad.r);
+    const max = Math.max(...items.map(d => d.total), 1);
+    const svg = el('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
+    items.forEach((d, i) => {
+      const y = pad.t + i * rowH;
+      svg.appendChild(text(0, y + 20, d.label, { ...LBL_FONT, fill: 'var(--ink)' }));
+      svg.appendChild(text(0, y + 35, d.sub, { ...AXIS_FONT }));
+      let x = pad.l;
+      const scale = (d.total / max) * iw;
+      keys.forEach((k, j) => {
+        const v = d.values[j];
+        if (!v) return;
+        const seg = Math.max(2, (v / (d.total || 1)) * scale - (j ? 2 : 0));
+        const first = x === pad.l, last = j === keys.length - 1 || d.values.slice(j + 1).every(z => !z);
+        const r = 4;
+        const dpath = first && last ? rowPath(x, y + 8, seg, 20, r)
+          : first ? `M${x + r},${y + 8}L${x + seg},${y + 8}L${x + seg},${y + 28}L${x + r},${y + 28}Q${x},${y + 28} ${x},${y + 28 - r}L${x},${y + 8 + r}Q${x},${y + 8} ${x + r},${y + 8}Z`
+          : last ? rowPath(x, y + 8, seg, 20, r)
+          : `M${x},${y + 8}L${x + seg},${y + 8}L${x + seg},${y + 28}L${x},${y + 28}Z`;
+        const p = el('path', { d: dpath, fill: k.color });
+        bindTip(p, `<b>${d.label}</b>${tipRow(k.label, `${v} (${fmt(v / (d.total || 1))})`)}`);
+        svg.appendChild(p);
+        x += seg + 2;
+      });
+    });
+    return svg;
+  };
+}
+
+function lineChart({ cats, series, fmt, tip }) {
+  return w => {
+    const h = 300, pad = { t: 16, r: 92, b: 38, l: 52 };
+    const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
+    const vals = series.flatMap(s => s.vals.filter(v => v != null));
+    const t = ticks(Math.max(...vals, 0.0001));
+    const max = t.max;
+    const svg = el('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
+    const X = i => cats.length === 1 ? pad.l + iw / 2 : pad.l + (i / (cats.length - 1)) * iw;
+    const Y = v => pad.t + ih - (v / max) * ih;
+
+    t.vals.forEach((v, i) => {
+      svg.appendChild(el('line', { x1: pad.l, x2: pad.l + iw, y1: Y(v), y2: Y(v),
+        stroke: i ? 'var(--grid)' : 'var(--axis)', 'stroke-width': 1 }));
+      svg.appendChild(text(pad.l - 8, Y(v) + 4, fmt(v), { ...AXIS_FONT, 'text-anchor': 'end' }));
+    });
+    const step = Math.ceil(cats.length / Math.max(2, Math.floor(iw / 62)));
+    cats.forEach((c, i) => {
+      if (i % step && i !== cats.length - 1) return;
+      svg.appendChild(text(X(i), h - 16, c,
+        { ...AXIS_FONT, 'text-anchor': i === cats.length - 1 ? 'end' : 'middle' }));
+    });
+
+    series.forEach(s => {
+      let run = [];
+      const flush = () => {
+        if (run.length > 1) svg.appendChild(el('path', {
+          d: 'M' + run.map(p => `${p[0]},${p[1]}`).join('L'),
+          fill: 'none', stroke: s.color, 'stroke-width': 2,
+          'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+        else if (run.length === 1) svg.appendChild(el('circle', { cx: run[0][0], cy: run[0][1], r: 4, fill: s.color }));
+        run = [];
+      };
+      s.vals.forEach((v, i) => { if (v == null) flush(); else run.push([X(i), Y(v)]); });
+      flush();
+    });
+
+    const ends = series.map(s => {
+      let i = s.vals.length - 1;
+      while (i >= 0 && s.vals[i] == null) i--;
+      return i < 0 ? null : { s, i, x: X(i), y: Y(s.vals[i]), v: s.vals[i] };
+    }).filter(Boolean).sort((a, b) => a.y - b.y);
+    ends.forEach((e, k) => { e.ly = k && e.y - ends[k - 1].ly < 15 ? ends[k - 1].ly + 15 : e.y; });
+    ends.forEach(e => {
+      if (Math.abs(e.ly - e.y) > 1)
+        svg.appendChild(el('line', { x1: e.x + 6, y1: e.y, x2: e.x + 13, y2: e.ly - 4,
+          stroke: 'var(--axis)', 'stroke-width': 1 }));
+      svg.appendChild(el('circle', { cx: e.x, cy: e.y, r: 4, fill: e.s.color,
+        stroke: 'var(--surface-1)', 'stroke-width': 2 }));
+      svg.appendChild(text(e.x + 15, e.ly + 4, `${e.s.name} ${fmt(e.v)}`, { ...AXIS_FONT, fill: 'var(--ink-2)', 'font-weight': 600 }));
+    });
+
+    const bw = cats.length > 1 ? iw / (cats.length - 1) : iw;
+    cats.forEach((c, i) => {
+      const g = el('g');
+      const hit = el('rect', { x: X(i) - bw / 2, y: pad.t, width: bw, height: ih, fill: 'transparent' });
+      const line = el('line', { x1: X(i), x2: X(i), y1: pad.t, y2: pad.t + ih,
+        stroke: 'var(--axis)', 'stroke-width': 1, opacity: 0 });
+      const dots = series.map(s => s.vals[i] == null ? null :
+        el('circle', { cx: X(i), cy: Y(s.vals[i]), r: 4, fill: s.color, stroke: 'var(--surface-1)', 'stroke-width': 2, opacity: 0 }));
+      hit.addEventListener('pointerenter', () => { line.setAttribute('opacity', 1); dots.forEach(d => d && d.setAttribute('opacity', 1)); });
+      hit.addEventListener('pointerleave', () => { line.setAttribute('opacity', 0); dots.forEach(d => d && d.setAttribute('opacity', 0)); });
+      bindTip(hit, `<b>${c}</b>${tip(i)}`);
+      g.append(line, ...dots.filter(Boolean), hit);
+      svg.appendChild(g);
+    });
+    return svg;
+  };
+}
+
+/* ------------------------------------------------------- shared renderers */
+
+function tableHTML(head, rows) {
+  return `<thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead>` +
+    `<tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+}
+
+/* The metric set the brief asks for, in the order it asks for it. */
+const FUNNEL_HEAD = ['Leads', 'Booked', 'Booking rate', 'Canceled', 'Cancel rate', 'Inspected',
+  'Completed', 'Conversion', '$0 jobs', '$0 rate', 'Revenue', 'AOV'];
+const funnelCells = m => [
+  num(m.leads), num(m.booked), pct(m.bookingRate), num(m.canceled),
+  m.booked ? pct(m.cancelRate) : dash, num(m.inspected), num(m.completed), pct(m.conversionRate),
+  num(m.zeroJobs), m.inspected ? pct(m.zeroRate, 0) : dash,
+  money(m.revenue), m.payingJobs ? money(m.aov) : dash
+];
+
+/* A segment block: labelled rows sharing the funnel metric set. */
+function segmentBlock(mountId, groups, firstHead, note) {
+  const rows = groups.map(g => [
+    `${g.label}${g.sub ? ` <span class="muted">${g.sub}</span>` : ''}`,
+    ...funnelCells(metrics(g.rows))
+  ]);
+  const total = metrics(groups.flatMap(g => g.rows));
+  rows.push(['<strong>All exposed leads</strong>', ...funnelCells(total).map(c => `<strong>${c}</strong>`)]);
+  $(mountId).innerHTML = tableHTML([firstHead, ...FUNNEL_HEAD], rows);
+  if (note) $(mountId + 'Note').innerHTML = note;
+}
+
+/* ---------------------------------------------------------------- overview */
+
+const RATE_KEYS = [
+  ['selfBookedRate', 'Self-booked'],
+  ['bookingRate',    'Booked'],
+  ['inspectionRate', 'Inspected'],
+  ['conversionRate', 'Converted']
+];
+
+function renderOverview(s, E, C) {
+  const tiles = [
+    { label: 'Experiment leads', value: num(E.leads), chip: `Control: ${num(C.leads)}`, hero: true },
+    { label: 'Booking rate', value: pct(E.bookingRate), d: E.bookingRate - C.bookingRate, fmt: pp },
+    { label: 'Cancel rate', value: E.booked ? pct(E.cancelRate) : '—', d: E.cancelRate - C.cancelRate, fmt: pp, invert: true },
+    { label: 'Conversion rate', value: pct(E.conversionRate), d: E.conversionRate - C.conversionRate, fmt: pp },
+    { label: 'AOV', value: E.payingJobs ? money(E.aov) : '—', d: E.aov - C.aov, fmt: moneyD },
+    { label: '$0 job rate', value: E.inspected ? pct(E.zeroRate, 0) : '—', d: E.zeroRate - C.zeroRate, fmt: pp, invert: true }
+  ];
+  $('#tiles').innerHTML = tiles.map(t => {
+    const sign = Math.abs(t.d) < 1e-9 ? 0 : t.d > 0 ? 1 : -1;
+    const body = t.chip !== undefined ? chip(t.chip, 0)
+      : chip(t.fmt(t.d) + ' vs control', sign, t.invert ? -sign : sign);
+    return `<div class="card tile"><div class="label">${t.label}</div>
+      <div class="value${t.hero ? ' hero' : ''}">${t.value}</div>${body}</div>`;
+  }).join('');
+
+  $('#ratesSub').textContent = `${dlabel(s.start)} – ${dlabel(s.end)} · ${num(E.leads)} experiment leads vs ${num(C.leads)} control leads`;
+  $('#ratesLegend').innerHTML =
+    `<span><i class="key" style="background:var(--s1)"></i>Experiment (cohort 2)</span>` +
+    `<span><i class="key" style="background:var(--s2)"></i>Control</span>`;
+  draw($('#ratesChart'), groupedColumns({
+    cats: RATE_KEYS.map(k => k[1]),
+    series: [
+      { name: 'Experiment', color: 'var(--s1)', vals: RATE_KEYS.map(k => E[k[0]]) },
+      { name: 'Control',    color: 'var(--s2)', vals: RATE_KEYS.map(k => C[k[0]]) }
+    ],
+    fmt: v => pct(v, 0), deltaFmt: pp,
+    tip: (i, j) => {
+      const m = j ? C : E, key = RATE_KEYS[i][0];
+      const cnt = { selfBookedRate: m.selfBooked, bookingRate: m.booked, inspectionRate: m.inspected, conversionRate: m.completed }[key];
+      return tipRow(j ? 'Control' : 'Experiment', pct(m[key])) + tipRow('Leads', `${num(cnt)} of ${num(m.leads)}`);
+    }
+  }));
+
+  const row = (label, e, c, fmtv, dir) => {
+    const d = (typeof e === 'number' && typeof c === 'number') ? e - c : null;
+    const cls = d === null || dir === 0 || Math.abs(d) < 1e-9 ? '' : (dir * d > 0 ? 'up' : 'down');
+    const dtxt = d === null ? '—' : fmtv === pct ? pp(d) : fmtv === money ? moneyD(d) : (d >= 0 ? '+' : '−') + num(Math.abs(d));
+    return [label, fmtv(c), fmtv(e), `<span class="chip ${cls}">${dtxt}</span>`];
+  };
+  $('#scorecard').innerHTML = tableHTML(['Metric', 'Control', 'Experiment', 'Difference'], [
+    row('Leads', E.leads, C.leads, num, 0),
+    row('Booking jobs', E.booked, C.booked, num, 1),
+    row('Canceled jobs', E.canceled, C.canceled, num, -1),
+    row('Completed jobs', E.completed, C.completed, num, 1),
+    row('$0 jobs (inspected, no invoice)', E.zeroJobs, C.zeroJobs, num, -1),
+    row('Revenue', E.revenue, C.revenue, money, 1),
+    row('Booking rate', E.bookingRate, C.bookingRate, pct, 1),
+    row('Cancel rate (of booked)', E.cancelRate, C.cancelRate, pct, -1),
+    row('Conversion rate', E.conversionRate, C.conversionRate, pct, 1),
+    row('AOV (per paying job)', E.aov, C.aov, money, 1),
+    row('$0 rate (of jobs performed)', E.zeroRate, C.zeroRate, pct, -1),
+    row('Completed inspections', E.inspected, C.inspected, num, 1),
+    row('Inspection rate', E.inspectionRate, C.inspectionRate, pct, 1),
+    row('Self-booked appointments', E.selfBooked, C.selfBooked, num, 1),
+    row('ISA-booked appointments', E.isaBooked, C.isaBooked, num, 0),
+    row('Symptoms reported: yes', E.sympYesRate, C.sympYesRate, pct, 0)
+  ]);
+}
+
+/* ----------------------------------------------------------------- cohorts */
+
+function renderCohorts(s) {
+  const names = [...new Set(s.all.map(r => r.cohort))]
+    .sort((a, b) => (a === 'NOT EXPOSED' ? 1 : b === 'NOT EXPOSED' ? -1 : a.localeCompare(b)));
+  const rows = names.map(c => {
+    const g = s.all.filter(r => r.cohort === c);
+    const m = metrics(g);
+    const form = g.filter(r => r.intent || r.mileage || r.symptoms).length;
+    return [
+      `${c === '2' ? '<strong>2 — intent-aware form</strong>' : c}` +
+        (form ? '' : ' <span class="muted">(no form data)</span>'),
+      ...funnelCells(m)
+    ];
+  });
+  $('#cohortTable').innerHTML = tableHTML(['Cohort', ...FUNNEL_HEAD], rows);
+
+  /* staged launch: which cohorts are live in which market */
+  const markets = [...new Set(s.all.map(r => r.market))].sort();
+  $('#stagingTable').innerHTML = tableHTML(['Market', ...names, 'Total'],
+    markets.map(mk => {
+      const g = s.all.filter(r => r.market === mk);
+      return [mk, ...names.map(c => {
+        const n = g.filter(r => r.cohort === c).length;
+        return n ? `${num(n)} <span class="muted">${pct(n / g.length, 0)}</span>` : dash;
+      }), `<strong>${num(g.length)}</strong>`];
+    }));
+}
+
+/* ------------------------------------------------------------------- trend */
+
+const TREND_METRICS = [
+  ['bookingRate', 'Booking rate'],
+  ['cancelRate', 'Cancel rate'],
+  ['conversionRate', 'Conversion rate'],
+  ['selfBookedRate', 'Self-booked rate'],
+  ['aov', 'AOV']
+];
+
+function weekStart(d) {
+  const dt = new Date(d + 'T00:00:00');
+  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+  return dt.toISOString().slice(0, 10);
+}
+const periodKey = d => state.trendGrain === 'month' ? d.slice(0, 7) : weekStart(d);
+const periodLabel = k => state.trendGrain === 'month' ? mlabel(k) : dlabel(k);
+
+function renderTrend(s) {
+  $('#trendGrain').innerHTML = [['week', 'Weekly'], ['month', 'Monthly']].map(([k, l]) =>
+    `<button data-grain="${k}" aria-pressed="${state.trendGrain === k}">${l}</button>`).join('');
+  $$('#trendGrain button').forEach(b => b.onclick = () => { state.trendGrain = b.dataset.grain; renderTrend(scoped()); });
+  $('#trendMetricSeg').innerHTML = TREND_METRICS.map(([k, l]) =>
+    `<button data-metric="${k}" aria-pressed="${state.trendMetric === k}">${l}</button>`).join('');
+  $$('#trendMetricSeg button').forEach(b => b.onclick = () => { state.trendMetric = b.dataset.metric; renderTrend(scoped()); });
+  $('#trendGroupSel').value = state.trendGroup;
+
+  const key = state.trendMetric;
+  const isMoney = key === 'aov';
+  const fmt = isMoney ? money : (v => pct(v, 0));
+  const fmtExact = isMoney ? money : (v => pct(v, 1));
+  const has = m => isMoney ? m.payingJobs > 0 : (key === 'cancelRate' ? m.booked > 0 : m.leads > 0);
+  const basis = m => isMoney ? `${num(m.payingJobs)} paying jobs`
+    : key === 'cancelRate' ? `${num(m.booked)} booked` : `${num(m.leads)} leads`;
+
+  const buckets = new Map();
+  for (const r of s.all) {
+    const isE = r.isExp, isC = inControl(r);
+    if (!isE && !isC) continue;
+    const k = periodKey(r.date);
+    if (!buckets.has(k)) buckets.set(k, { e: [], c: [] });
+    buckets.get(k)[isE ? 'e' : 'c'].push(r);
+  }
+  const keys = [...buckets.keys()].sort();
+  const E = keys.map(k => metrics(buckets.get(k).e));
+  const C = keys.map(k => metrics(buckets.get(k).c));
+  const cats = keys.map(periodLabel);
+
+  $('#trendLegend').innerHTML =
+    `<span><i class="key" style="background:var(--s1)"></i>Experiment (cohort 2)</span>` +
+    `<span><i class="key" style="background:var(--s2)"></i>Control</span>`;
+  draw($('#trendChart'), lineChart({
+    cats,
+    series: [
+      { name: 'Exp', color: 'var(--s1)', vals: E.map(m => has(m) ? m[key] : null) },
+      { name: 'Ctl', color: 'var(--s2)', vals: C.map(m => has(m) ? m[key] : null) }
+    ],
+    fmt,
+    tip: i => `<div class="small" style="margin:-2px 0 5px">${state.trendGrain === 'month' ? '' : 'Week of '}${cats[i]}</div>` +
+      tipRow('Experiment', has(E[i]) ? `${fmt(E[i][key])} · ${basis(E[i])}` : '—') +
+      tipRow('Control', has(C[i]) ? `${fmt(C[i][key])} · ${basis(C[i])}` : '—')
+  }));
+
+  const series = state.trendGroup === 'ctl' ? C : E;
+  $('#trendTable').innerHTML = tableHTML(
+    [state.trendGrain === 'month' ? 'Month' : 'Week of', ...FUNNEL_HEAD],
+    keys.map((k, i) => [
+      periodLabel(k) + (i === keys.length - 1 ? ' <span class="muted">(partial)</span>' : ''),
+      ...funnelCells(series[i])
+    ]));
+  $('#trendTableCap').textContent =
+    `${state.trendGroup === 'ctl' ? 'Control' : 'Experiment (cohort 2)'} · full metric set per ${state.trendGrain}`;
+}
+
+/* ---------------------------------------------------------------- segments */
+
+function renderSegments(s) {
+  const exp = s.exp;
+  $('#segSub').textContent =
+    `${num(exp.length)} exposed leads, ${dlabel(s.start)} – ${dlabel(s.end)}. Every breakdown below is cohort 2 only.`;
+
+  /* 1. symptoms reported */
+  segmentBlock('#segSymptoms', [
+    { label: 'Symptoms: yes', rows: exp.filter(r => r.symptoms) },
+    { label: 'Symptoms: no', rows: exp.filter(r => !r.symptoms) }
+  ], 'Symptoms',
+    `<strong>Read "no" with care.</strong> <code>viocSymptoms</code> is <code>false</code> both for a lead that
+     answered No and for one that dropped out before the question, so the No row mixes real answers with
+     abandonment. ${num(exp.filter(r => !r.symptoms && !r.mileage && !r.intent).length)} of the
+     ${num(exp.filter(r => !r.symptoms).length)} "no" leads have no later answer at all.`);
+
+  /* 2. off-ramp offered / taken */
+  const reached = exp.filter(r => r.reachedOfframp);
+  const offered = exp.filter(r => r.offered);
+  const took = offered.filter(r => r.deferred);
+  segmentBlock('#segOfframp', [
+    { label: 'Offered the off-ramp — took it', rows: took },
+    { label: 'Offered the off-ramp — declined', rows: offered.filter(r => !r.deferred) },
+    { label: 'Reached the question, not offered', rows: reached.filter(r => !r.offered) },
+    { label: 'Never reached the question', rows: exp.filter(r => !r.reachedOfframp) }
+  ], 'Off-ramp',
+    `Offered = <code>viocSymptoms = false</code> AND <code>viocMileageRange</code> in
+     (mi-1, mi-2, mi-3) AND <code>viocLastBrakeRepair</code> in (br-1, br-2). Took it =
+     <code>deferredAt</code> populated with <code>deferralSource = 'vioc-off-ramp'</code>.`);
+
+  /* 3. booking source */
+  segmentBlock('#segSource', [
+    { label: 'Self-booked', rows: exp.filter(r => r.selfBooked) },
+    { label: 'ISA-booked', rows: exp.filter(r => !r.selfBooked && r.booked) },
+    { label: 'Never booked', rows: exp.filter(r => !r.booked) }
+  ], 'Booking source',
+    'Booking-rate and cancel-rate columns are structural for these rows — the segment is defined by booking.');
+
+  /* 4. repair intent */
+  const order = ['ready-to-fix', 'open', 'inspection-only', ''];
+  segmentBlock('#segIntent', order.map(k => ({
+    label: INTENT_LABEL[k], rows: exp.filter(r => r.intent === k)
+  })).filter(g => g.rows.length), 'Repair intent',
+    'Intent is only asked on the experiment flow, so there is no control comparison for this cut.');
+
+  const intents = order.map(k => ({ label: INTENT_LABEL[k], m: metrics(exp.filter(r => r.intent === k)) }))
+    .filter(g => g.m.leads);
+  draw($('#intentChart'), hBars({
+    items: intents.map(g => ({ label: g.label, value: g.m.conversionRate, m: g.m })),
+    fmt: v => pct(v), labelW: 175,
+    tip: d => tipRow('Leads', num(d.m.leads)) + tipRow('Booked', num(d.m.booked)) +
+      tipRow('Completed inspections', num(d.m.inspected)) + tipRow('Completed jobs', num(d.m.completed)) +
+      tipRow('Revenue', money(d.m.revenue)) + tipRow('AOV', d.m.payingJobs ? money(d.m.aov) : '—')
+  }));
+}
+
+/* ---------------------------------------------------------------- off-ramp */
+
+function renderOfframp(s) {
+  const exp = s.exp;
+  const reached = exp.filter(r => r.reachedOfframp);
+  const offered = exp.filter(r => r.offered);
+  const took = offered.filter(r => r.deferred);
+  const declined = offered.filter(r => !r.deferred);
+  const bookedAnyway = declined.filter(r => r.booked);
+  const notBooked = exp.filter(r => !r.booked);
+  const strays = exp.filter(r => r.deferred && !r.offered);
+
+  const takeOfOffered = offered.length ? took.length / offered.length : null;
+  const takeOfNonBookers = notBooked.length ? took.length / notBooked.length : null;
+
+  $('#offrampFunnel').innerHTML = tableHTML(['Stage', 'Leads', 'Share of exposed'], [
+    ['Exposed leads (cohort 2)', num(exp.length), '100%'],
+    ['Answered no symptoms', num(exp.filter(r => !r.symptoms).length), pct(exp.length ? exp.filter(r => !r.symptoms).length / exp.length : 0)],
+    ['Reached mileage + last-repair questions', num(reached.length), pct(exp.length ? reached.length / exp.length : 0)],
+    ['<strong>Offered the off-ramp</strong>', `<strong>${num(offered.length)}</strong>`, pct(exp.length ? offered.length / exp.length : 0)],
+    ['<strong>Took the deferral</strong>', `<strong>${num(took.length)}</strong>`, pct(exp.length ? took.length / exp.length : 0)]
+  ]);
+
+  $('#offrampTakeup').innerHTML = tableHTML(['Take-up denominator', 'Value', 'Basis'], [
+    ['Share of leads offered the off-ramp',
+      takeOfOffered === null ? dash : `<strong>${pct(takeOfOffered)}</strong>`,
+      `${num(took.length)} of ${num(offered.length)}`],
+    ['Share of exposed leads that did not book',
+      takeOfNonBookers === null ? dash : `<strong>${pct(takeOfNonBookers)}</strong>`,
+      `${num(took.length)} of ${num(notBooked.length)}`]
+  ]);
+
+  $('#offrampOutcome').innerHTML = tableHTML(['What happened to the leads offered it', ...FUNNEL_HEAD], [
+    ['Took the deferral', ...funnelCells(metrics(took))],
+    ['Declined, scheduled anyway', ...funnelCells(metrics(bookedAnyway))],
+    ['Declined, never booked', ...funnelCells(metrics(declined.filter(r => !r.booked)))],
+    ['<strong>Comparison: reached the question, not offered</strong>',
+      ...funnelCells(metrics(reached.filter(r => !r.offered))).map(c => `<strong>${c}</strong>`)]
+  ]);
+
+  const insp = bookedAnyway.filter(r => r.inspected);
+  const reds = insp.filter(r => r.outcome === 'RED').length;
+  const recorded = insp.filter(r => r.outcome !== 'UNKNOWN / NOT RECORDED').length;
+  $('#offrampNote').innerHTML =
+    `<strong>Is the off-ramp diverting the right customers?</strong> ` +
+    (recorded
+      ? `Of the leads that were offered the deferral but scheduled anyway, ${num(recorded)} have a recorded
+         inspection finding and ${num(reds)} of those came back Red — i.e. the off-ramp would have deferred
+         a customer who did need work.`
+      : `Not answerable yet: none of the ${num(bookedAnyway.length)} leads that declined the off-ramp and
+         booked have a recorded inspection finding, so there is no evidence either way on targeting.`) +
+    (strays.length ? ` <strong>${num(strays.length)} lead(s) took the deferral without meeting the offered
+      criteria</strong> — worth checking against the form logic.` : '');
+
+  $('#deferralTable').innerHTML = took.length ? tableHTML(
+    ['Deferred', 'Market', 'Mileage', 'Last brake repair', 'Booked since?'],
+    took.map(r => [dlabel(r.deferredDate || r.date), r.market,
+      MILEAGE_LABEL[r.mileage] ?? r.mileage, REPAIR_LABEL[r.lastRepair] ?? r.lastRepair,
+      r.completed ? '<span class="chip up">Completed job</span>'
+        : r.booked ? '<span class="chip">Booked</span>' : '<span class="chip">Not yet</span>']))
+    : `<tbody><tr><td class="muted">No deferrals in this range.</td></tr></tbody>`;
+}
+
+/* ---------------------------------------------------------------- findings */
+
+const OUTCOMES = [
+  { key: 'RED', label: 'Red — service immediately', color: 'var(--crit)' },
+  { key: 'YELLOW', label: 'Yellow — service soon', color: 'var(--warn)' },
+  { key: 'GREEN', label: 'Green — all systems go', color: 'var(--good)' },
+  { key: 'UNKNOWN / NOT RECORDED', label: 'Not recorded', color: 'var(--unknown)' }
+];
+const outcomeCounts = rows => OUTCOMES.map(o => rows.filter(r => r.outcome === o.key).length);
+
+function findingRows(groups) {
+  return groups.map(g => {
+    const insp = g.rows.filter(r => r.inspected);
+    const c = outcomeCounts(insp);
+    const recorded = insp.length - c[3];
+    return [g.label, num(insp.length), ...c.map(num),
+      recorded ? pct(c[0] / recorded, 0) : dash];
+  });
+}
+
+function conversionRows(groups) {
+  return groups.flatMap(g => {
+    const insp = g.rows.filter(r => r.inspected);
+    return OUTCOMES.map(o => {
+      const set = insp.filter(r => r.outcome === o.key);
+      const conv = set.filter(r => r.completed && r.revenue > 0);
+      const rev = conv.reduce((a, r) => a + r.revenue, 0);
+      return [`${g.label} <span class="find"><i style="background:${o.color}"></i>${o.label.split(' — ')[0]}</span>`,
+        num(set.length), num(conv.length), set.length ? pct(conv.length / set.length) : dash,
+        money(rev), conv.length ? money(rev / conv.length) : dash];
+    }).filter(r => r[1] !== '0');
+  });
+}
+
+function renderFindings(s) {
+  const exp = s.exp, ctl = s.ctl;
+  const groups = [{ label: 'Experiment (cohort 2)', rows: exp }, { label: 'Control', rows: ctl }];
+
+  $('#findingsLegend').innerHTML = OUTCOMES.map(o =>
+    `<span><i class="key" style="background:${o.color}"></i>${o.label}</span>`).join('');
+  draw($('#findingsChart'), stackedBars({
+    items: groups.map(g => {
+      const insp = g.rows.filter(r => r.inspected);
+      return { label: g.label, sub: `${num(insp.length)} completed inspections`,
+        total: insp.length, values: outcomeCounts(insp) };
+    }),
+    keys: OUTCOMES, fmt: v => pct(v, 0), labelW: 175
+  }));
+
+  const head = ['Group', 'Inspections', ...OUTCOMES.map(o => o.label.split(' — ')[0]), 'Red share of recorded'];
+  $('#findingsGroup').innerHTML = tableHTML(head, findingRows(groups));
+
+  const segGroups = [
+    { label: 'Symptoms: yes', rows: exp.filter(r => r.symptoms) },
+    { label: 'Symptoms: no', rows: exp.filter(r => !r.symptoms) },
+    { label: 'Offered off-ramp', rows: exp.filter(r => r.offered) },
+    { label: 'Not offered off-ramp', rows: exp.filter(r => !r.offered) },
+    { label: 'Self-booked', rows: exp.filter(r => r.selfBooked) },
+    { label: 'ISA-booked', rows: exp.filter(r => !r.selfBooked && r.booked) },
+    ...['ready-to-fix', 'open', 'inspection-only'].map(k =>
+      ({ label: 'Intent: ' + INTENT_LABEL[k], rows: exp.filter(r => r.intent === k) }))
+  ].filter(g => g.rows.some(r => r.inspected));
+  $('#findingsSeg').innerHTML = tableHTML(head, findingRows(segGroups));
+
+  $('#findingsConv').innerHTML = tableHTML(
+    ['Group × finding', 'Inspections', 'Converted to repair', 'Conversion', 'Revenue', 'AOV'],
+    conversionRows(groups));
+
+  const allInsp = [...exp, ...ctl].filter(r => r.inspected);
+  const zeroJobs = allInsp.filter(r => r.zeroJob);
+  const paidJobs = allInsp.filter(r => !r.zeroJob);
+  const has = rows => rows.filter(r => r.outcome !== 'UNKNOWN / NOT RECORDED').length;
+  $('#findingsWarn').innerHTML =
+    `<strong>Conversion by finding is not measurable from this extract.</strong>
+     <code>postInspection_finalRecomendation</code> is empty on every row, so
+     <code>recommendation_outcome</code> falls back to <code>postJobChecklist_finalRecomendation</code> —
+     the post-job checklist, which is filled in on visits that end without a repair. In this range
+     ${pct(zeroJobs.length ? has(zeroJobs) / zeroJobs.length : 0, 0)} of $0 jobs
+     (${num(has(zeroJobs))} of ${num(zeroJobs.length)}) carry a finding, against
+     ${pct(paidJobs.length ? has(paidJobs) / paidJobs.length : 0, 0)} of jobs where a repair sold
+     (${num(has(paidJobs))} of ${num(paidJobs.length)}). A recorded finding is therefore close to a
+     marker for "no repair sold", which forces conversion-by-finding toward zero no matter what the
+     tech actually found. Getting the post-inspection recommendation to flow is the fix.`;
+}
+
+/* ----------------------------------------------------------------- markets */
+
+function renderMarkets(s) {
+  const names = [...new Set(s.all.map(r => r.market))].sort();
+  const rows = names.map(nm => ({
+    market: nm,
+    e: metrics(s.exp.filter(r => r.market === nm)),
+    c: metrics(s.ctl.filter(r => r.market === nm))
+  })).filter(r => r.e.leads).sort((a, b) => b.e.aov - a.e.aov);
+
+  draw($('#marketChart'), hBars({
+    items: rows.map(r => ({ label: r.market, value: r.e.aov, r })),
+    fmt: money, labelW: 110,
+    tip: d => tipRow('Experiment leads', num(d.r.e.leads)) +
+      tipRow('Completed jobs', num(d.r.e.payingJobs)) + tipRow('Revenue', money(d.r.e.revenue)) +
+      tipRow('Conversion', pct(d.r.e.conversionRate)) +
+      tipRow('Control AOV', d.r.c.payingJobs ? money(d.r.c.aov) : '—')
+  }));
+
+  $('#marketTable').innerHTML = tableHTML(['Market', ...FUNNEL_HEAD, 'Control AOV'],
+    rows.map(r => [
+      r.market + (r.e.leads < 30 ? ' <span class="muted">(small n)</span>' : ''),
+      ...funnelCells(r.e),
+      r.c.payingJobs ? money(r.c.aov) : dash
+    ]));
+}
+
+/* ------------------------------------------------------------- raw table */
+
+const OUTCOME_COLOR = { RED: 'var(--crit)', YELLOW: 'var(--warn)', GREEN: 'var(--good)' };
+const yesNo = v => v ? 'Yes' : 'No';
+
+const RAW_COLUMNS = [
+  { key: 'date',       label: 'Lead date',   csv: r => r.date, cell: r => dlabel(r.date) },
+  { key: 'market',     label: 'Market',      csv: r => r.market },
+  { key: 'cohort',     label: 'Cohort',      csv: r => r.cohort },
+  { key: 'group',      label: 'Group',       val: r => r.isExp ? 'Experiment' : 'Control', csv: r => r.isExp ? 'Experiment' : 'Control' },
+  { key: 'symptoms',   label: 'Symptoms',    num: true, val: r => r.symptoms ? 1 : 0, csv: r => yesNo(r.symptoms) },
+  { key: 'mileage',    label: 'Mileage',     csv: r => r.mileage ? MILEAGE_LABEL[r.mileage] ?? r.mileage : '' },
+  { key: 'lastRepair', label: 'Last repair', csv: r => r.lastRepair ? REPAIR_LABEL[r.lastRepair] ?? r.lastRepair : '' },
+  { key: 'offered',    label: 'Off-ramp offered', num: true, val: r => r.offered ? 1 : 0, csv: r => yesNo(r.offered) },
+  { key: 'deferred',   label: 'Took deferral',    num: true, val: r => r.deferred ? 1 : 0, csv: r => yesNo(r.deferred) },
+  { key: 'intent',     label: 'Repair intent', csv: r => r.intent ? INTENT_LABEL[r.intent] ?? r.intent : '' },
+  { key: 'bookingSource', label: 'Booking source', csv: r => r.bookingSource },
+  { key: 'status',     label: 'Job status',  csv: r => r.status },
+  { key: 'booked',     label: 'Booked',      num: true, csv: r => yesNo(r.booked) },
+  { key: 'canceled',   label: 'Canceled',    num: true, csv: r => yesNo(r.canceled) },
+  { key: 'inspected',  label: 'Inspected',   num: true, csv: r => yesNo(r.inspected) },
+  { key: 'completed',  label: 'Completed',   num: true, csv: r => yesNo(r.completed) },
+  { key: 'outcome',    label: 'Finding',
+    csv: r => r.outcome === 'UNKNOWN / NOT RECORDED' ? 'Not recorded' : r.outcome,
+    cell: r => {
+      const c = OUTCOME_COLOR[r.outcome];
+      return c ? `<span class="find"><i style="background:${c}"></i>${r.outcome[0] + r.outcome.slice(1).toLowerCase()}</span>`
+               : '<span class="muted">Not recorded</span>';
+    } },
+  { key: 'revenue',    label: 'Revenue',     num: true, csv: r => r.revenue || 0,
+    cell: r => r.revenue ? money(r.revenue) : dash },
+  { key: 'zeroJob',    label: '$0 job',      num: true, val: r => r.zeroJob ? 1 : 0, csv: r => yesNo(r.zeroJob) },
+  { key: 'id',         label: 'Inquiry id',  csv: r => r.id },
+  { key: 'link',       label: 'Job',         csv: r => r.link,
+    cell: r => r.link ? `<a href="${r.link}" target="_blank" rel="noopener">Open ↗</a>` : dash }
+];
+
+const PAGE_SIZE = 100;
+const colVal = (col, r) => col.val ? col.val(r) : r[col.key];
+
+function rawRows(s) {
+  let rows = state.rawGroup === 'exp' ? s.exp
+           : state.rawGroup === 'ctl' ? s.ctl
+           : state.rawGroup === 'everything' ? s.all
+           : [...s.exp, ...s.ctl];
+  const q = state.rawQuery.trim().toLowerCase();
+  if (q) rows = rows.filter(r => RAW_COLUMNS.some(c => String(c.csv ? c.csv(r) : colVal(c, r)).toLowerCase().includes(q)));
+  const col = RAW_COLUMNS.find(c => c.key === state.rawSort.key) || RAW_COLUMNS[0];
+  const dir = state.rawSort.dir;
+  return [...rows].sort((a, b) => {
+    const x = colVal(col, a), y = colVal(col, b);
+    if (col.num) return (Number(x) - Number(y)) * dir;
+    return String(x).localeCompare(String(y)) * dir;
+  });
+}
+
+function renderRaw(s) {
+  const rows = rawRows(s);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  state.rawPage = Math.min(state.rawPage, pages - 1);
+  const page = rows.slice(state.rawPage * PAGE_SIZE, (state.rawPage + 1) * PAGE_SIZE);
+
+  $('#rawSub').textContent =
+    `One row per lead, with the derived segment flags alongside. ${dlabel(s.start)} – ${dlabel(s.end)}` +
+    (state.market === 'ALL' ? '' : ` · ${state.market}`) + '.';
+  $('#rawCount').textContent = rows.length
+    ? `${num(rows.length)} rows · showing ${num(state.rawPage * PAGE_SIZE + 1)}–${num(state.rawPage * PAGE_SIZE + page.length)}`
+    : 'No rows match';
+
+  const arrow = c => state.rawSort.key === c.key ? (state.rawSort.dir > 0 ? ' ▲' : ' ▼') : '';
+  $('#rawTable').innerHTML =
+    `<thead><tr>${RAW_COLUMNS.map(c =>
+      `<th class="sortable${c.num ? ' n' : ''}" data-col="${c.key}" title="Sort by ${c.label}">${c.label}${arrow(c)}</th>`).join('')}</tr></thead>` +
+    `<tbody>${page.map(r => `<tr>${RAW_COLUMNS.map(c =>
+      `<td${c.num ? ' class="n"' : ''}>${c.cell ? c.cell(r) : (c.csv ? c.csv(r) : colVal(c, r)) || dash}</td>`).join('')}</tr>`).join('')}</tbody>`;
+
+  $$('#rawTable th.sortable').forEach(th => th.onclick = () => {
+    const key = th.dataset.col;
+    state.rawSort = state.rawSort.key === key
+      ? { key, dir: -state.rawSort.dir }
+      : { key, dir: RAW_COLUMNS.find(c => c.key === key).num ? -1 : 1 };
+    state.rawPage = 0;
+    renderRaw(scoped());
+  });
+
+  $('#rawPager').innerHTML = pages > 1
+    ? `<button id="pgPrev"${state.rawPage ? '' : ' disabled'}>← Previous</button>
+       <span>Page ${state.rawPage + 1} of ${pages}</span>
+       <button id="pgNext"${state.rawPage < pages - 1 ? '' : ' disabled'}>Next →</button>` : '';
+  const prev = $('#pgPrev'), next = $('#pgNext');
+  if (prev) prev.onclick = () => { state.rawPage--; renderRaw(scoped()); $('.tall').scrollTop = 0; };
+  if (next) next.onclick = () => { state.rawPage++; renderRaw(scoped()); $('.tall').scrollTop = 0; };
+}
+
+/* ---------------------------------------------------------------- export */
+
+const csvCell = v => {
+  const t = v == null ? '' : String(v);
+  return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+};
+const csvJoin = rows => rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+
+function download(name, body) {
+  const url = URL.createObjectURL(new Blob(['﻿' + body], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportName(s, suffix) {
+  const scope = state.market === 'ALL' ? '' : '-' + state.market.toLowerCase().replace(/\s+/g, '-');
+  return `vioc-${s.start}-to-${s.end}${scope}-${suffix}.csv`;
+}
+
+function exportView(s) {
+  const rows = rawRows(s);
+  download(exportName(s, 'view'),
+    csvJoin([RAW_COLUMNS.map(c => c.label), ...rows.map(r => RAW_COLUMNS.map(c => c.csv ? c.csv(r) : colVal(c, r)))]));
+}
+
+function exportFull(s) {
+  const rows = rawRows(s);
+  if (!rows.length) return;
+  const header = Object.keys(rows[0].raw);
+  download(exportName(s, 'full'), csvJoin([header, ...rows.map(r => header.map(h => r.raw[h]))]));
+}
+
+/* ------------------------------------------------------------------ boot */
+
+function render() {
+  const s = scoped();
+  const E = metrics(s.exp), C = metrics(s.ctl);
+  const empty = !s.exp.length && !s.ctl.length;
+  $('#empty').hidden = !empty;
+  $$('.panel').forEach(p => { p.hidden = empty || p.id !== 'p-' + state.tab; });
+  if (empty) {
+    $('#emptyMsg').textContent =
+      `Nothing matches ${dlabel(s.start)} – ${dlabel(s.end)}` +
+      (state.market === 'ALL' ? '' : ` in ${state.market}`) + '. Widen the date range or pick another market.';
+    $('#statusDetail').textContent = `${dlabel(s.start)} – ${dlabel(s.end)} · 0 leads in view`;
+    return;
+  }
+  const t = state.tab;
+  if (t === 'overview') renderOverview(s, E, C);
+  if (t === 'cohorts')  renderCohorts(s);
+  if (t === 'trend')    renderTrend(s);
+  if (t === 'segments') renderSegments(s);
+  if (t === 'offramp')  renderOfframp(s);
+  if (t === 'findings') renderFindings(s);
+  if (t === 'markets')  renderMarkets(s);
+  if (t === 'raw')      renderRaw(s);
+  $('#statusDetail').textContent =
+    `${dlabel(s.start)} – ${dlabel(s.end)} · ${num(s.exp.length + s.ctl.length)} leads in view` +
+    (state.market === 'ALL' ? '' : ` · ${state.market}`);
+}
+
+function setTab(name) {
+  state.tab = name;
+  $$('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  $$('.panel').forEach(p => { p.hidden = p.id !== 'p-' + name; });
+  render();
+  $$('.panel:not([hidden]) .chart').forEach(paint);
+}
+
+function wire() {
+  $$('.tab').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+  $('#fRange').onchange = e => {
+    state.range = e.target.value;
+    const custom = state.range === 'custom';
+    $('#customWrap').hidden = !custom; $('#customWrap2').hidden = !custom;
+    state.rawPage = 0;
+    render();
+  };
+  $('#fStart').onchange = e => { state.start = e.target.value; render(); };
+  $('#fEnd').onchange   = e => { state.end = e.target.value; render(); };
+  $('#fMarket').onchange = e => { state.market = e.target.value; state.rawPage = 0; render(); };
+  $('#fControl').onchange = e => { state.control = e.target.value; state.rawPage = 0; render(); };
+  $('#reset').onclick = () => {
+    state.range = 'aug'; state.market = 'ALL'; state.control = 'all';
+    state.rawQuery = ''; state.rawGroup = 'both'; state.rawPage = 0;
+    $('#fRange').value = 'aug'; $('#fMarket').value = 'ALL'; $('#fControl').value = 'all';
+    $('#rawSearch').value = ''; $('#rawGroup').value = 'both';
+    $('#customWrap').hidden = true; $('#customWrap2').hidden = true;
+    render();
+  };
+  $('#refresh').onclick = () => load(true);
+  $('#trendGroupSel').onchange = e => { state.trendGroup = e.target.value; renderTrend(scoped()); };
+  $('#rawSearch').oninput = e => { state.rawQuery = e.target.value; state.rawPage = 0; renderRaw(scoped()); };
+  $('#rawGroup').onchange = e => { state.rawGroup = e.target.value; state.rawPage = 0; renderRaw(scoped()); };
+  $('#exportView').onclick = () => exportView(scoped());
+  $('#exportFull').onclick = () => exportFull(scoped());
+
+  const theme = $('#theme');
+  const stored = localStorage.getItem('vioc-theme');
+  if (stored) document.documentElement.setAttribute('data-theme', stored);
+  const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark' ||
+    (!document.documentElement.hasAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+  const sync = () => { theme.textContent = isDark() ? 'Light' : 'Dark'; };
+  sync();
+  theme.onclick = () => {
+    const next = isDark() ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('vioc-theme', next);
+    sync();
+  };
+}
+
+function status(kind, msg) {
+  $('#statusDot').className = 'dot' + (kind === 'ok' ? '' : kind === 'warn' ? ' stale' : ' err');
+  $('#statusText').textContent = msg;
+}
+function banner(msg) {
+  const b = $('#banner');
+  if (!msg) { b.className = ''; b.textContent = ''; return; }
+  b.className = 'show'; b.innerHTML = msg;
+}
+
+/* Data sources, tried in order. The local proxy gives live Redash results; the published
+   JSON is CORS-enabled, so the page also works as plain static hosting (GitHub Pages)
+   with no proxy and no API key in the browser. */
+const SOURCES = [
+  { label: 'Live Redash', kind: 'csv',  url: '/api/data.csv' },
+  { label: 'Published snapshot', kind: 'json', url: './data/fact_nubrakes_vioc_self_schedule_daily.json' },
+  { label: 'Published snapshot', kind: 'json',
+    url: 'https://nubrakes-analytics.github.io/NuBrakes-Copilot/data/fact_nubrakes_vioc_self_schedule_daily.json' }
+];
+
+async function fetchSource(src) {
+  const sep = src.url.includes('?') ? '&' : '?';
+  const res = await fetch(src.url + sep + 't=' + Date.now(), { cache: 'no-store' });
+  if (!res.ok) throw new Error(`${src.label}: HTTP ${res.status}`);
+  const stamp = res.headers.get('X-Fetched-At') || res.headers.get('Last-Modified');
+  const body = await res.text();
+  const raw = src.kind === 'json' ? JSON.parse(body) : parseCSV(body);
+  if (!Array.isArray(raw) || !raw.length) throw new Error(`${src.label}: no rows`);
+  return { rows: raw.map(normalize).filter(r => r.date), stamp, src };
+}
+
+async function load(manual) {
+  status('warn', manual ? 'Refreshing…' : 'Loading…');
+  const failures = [];
+  try {
+    let got = null;
+    for (const src of SOURCES) {
+      try { got = await fetchSource(src); break; }
+      catch (e) { failures.push(String(e.message || e)); }
+    }
+    if (!got) throw new Error(failures.join(' · '));
+    const { rows, stamp, src } = got;
+    if (!rows.length) throw new Error('Feed returned no usable rows.');
+    banner('');
+    state.rows = rows;
+    state.source = src;
+    state.fetchedAt = stamp ? new Date(stamp) : new Date();
+    const dates = rows.map(r => r.date).sort();
+    state.minDate = dates[0]; state.maxDate = dates[dates.length - 1];
+    state.markets = [...new Set(rows.map(r => r.market))].sort();
+    $('#fMarket').innerHTML = '<option value="ALL">All markets</option>' +
+      state.markets.map(m => `<option value="${m}">${m}</option>`).join('');
+    $('#fMarket').value = state.market;
+    $('#fStart').min = $('#fEnd').min = state.minDate;
+    $('#fStart').max = $('#fEnd').max = state.maxDate;
+    if (!state.start) state.start = state.minDate;
+    if (!state.end) state.end = state.maxDate;
+    $('#fStart').value = state.start; $('#fEnd').value = state.end;
+
+    const app = $('#app'); if (app) app.remove();
+    $$('.chart').forEach(c => resizeObs.observe(c));
+    status(src.kind === 'csv' ? 'ok' : 'warn',
+      `${src.label} · ${num(rows.length)} leads through ${dlabel(state.maxDate)}`);
+    $('#status').title = (src.kind === 'csv' ? 'Fetched from Redash ' : 'Snapshot published ') +
+      state.fetchedAt.toLocaleString();
+    setTab(state.tab);
+  } catch (err) {
+    status('err', 'Data unavailable');
+    banner(`<strong>No data source could be reached.</strong> ${String(err.message || err)}<br>
+      <span class="small">The page tries the local Redash proxy first, then the published JSON snapshot.
+      Check your connection (VPN for Redash) and hit Refresh data.</span>`);
+    const app = $('#app'); if (app) app.innerHTML = '';
+  }
+}
+
+wire();
+load(false);
+addEventListener('resize', () => $$('.panel:not([hidden]) .chart').forEach(paint));
+
+</script>
+</body>
+</html>
