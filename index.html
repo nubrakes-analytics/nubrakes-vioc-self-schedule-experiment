@@ -11,7 +11,7 @@
   --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
   --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
   --s1:#2a78d6; --s2:#eb6834;
-  --seq-1:#86b6ef; --seq-2:#5598e7; --seq-3:#2a78d6; --seq-4:#1c5cab;
+  --seq-1:#86b6ef; --seq-2:#6da7ec; --seq-3:#3987e5; --seq-4:#256abf; --seq-5:#184f95;
   --good:#0ca30c; --warn:#fab219; --crit:#d03b3b; --unknown:#c3c2b7;
   --up:#006300; --down:#d03b3b;
   --chip-up:rgba(12,163,12,.10); --chip-down:rgba(208,59,59,.10); --chip-flat:rgba(11,11,11,.05);
@@ -24,7 +24,7 @@
     --ink:#fff; --ink-2:#c3c2b7; --muted:#898781;
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
     --s1:#3987e5; --s2:#d95926;
-    --seq-1:#6da7ec; --seq-2:#3987e5; --seq-3:#256abf; --seq-4:#184f95;
+    --seq-1:#86b6ef; --seq-2:#6da7ec; --seq-3:#3987e5; --seq-4:#256abf; --seq-5:#184f95;
     --unknown:#6b6a66;
     --up:#0ca30c; --down:#d03b3b;
     --chip-up:rgba(12,163,12,.16); --chip-down:rgba(208,59,59,.16); --chip-flat:rgba(255,255,255,.06);
@@ -36,7 +36,7 @@
   --ink:#fff; --ink-2:#c3c2b7; --muted:#898781;
   --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
   --s1:#3987e5; --s2:#d95926;
-  --seq-1:#6da7ec; --seq-2:#3987e5; --seq-3:#256abf; --seq-4:#184f95;
+  --seq-1:#86b6ef; --seq-2:#6da7ec; --seq-3:#3987e5; --seq-4:#256abf; --seq-5:#184f95;
   --unknown:#6b6a66;
   --up:#0ca30c; --down:#d03b3b;
   --chip-up:rgba(12,163,12,.16); --chip-down:rgba(208,59,59,.16); --chip-flat:rgba(255,255,255,.06);
@@ -199,6 +199,7 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
 
   <nav class="tabs" role="tablist" aria-label="Dashboard sections">
     <button class="tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button class="tab" role="tab" data-tab="funnel" aria-selected="false">Funnel</button>
     <button class="tab" role="tab" data-tab="cohorts" aria-selected="false">Cohorts</button>
     <button class="tab" role="tab" data-tab="trend" aria-selected="false">Trend</button>
     <button class="tab" role="tab" data-tab="segments" aria-selected="false">Segments</button>
@@ -226,10 +227,43 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
       <h2>Executive scorecard</h2>
       <div class="tbl-scroll"><table id="scorecard"></table></div>
       <div class="note"><strong>Definitions:</strong> booking / conversion / self-booked rates are per lead.
-        Cancel rate = canceled ÷ booked. A job that was performed (<em>inspected</em>) either sells a repair
-        (<em>completed</em>, always invoiced above $0) or closes at $0 — so <strong>inspected = completed +
+        Cancel rate = canceled ÷ booked. A completed inspection either ends in a completed repair
+        (always invoiced above $0) or closes at $0 — so <strong>inspected = completed +
         $0 jobs</strong>, and the $0 rate is measured against jobs performed. Revenue and AOV count the
         completed side only.</div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-funnel" hidden>
+    <div class="card">
+      <h2>Job funnel: how far leads get</h2>
+      <p class="sub" id="jobFunnelSub"></p>
+      <div class="legend" id="jobLegend"></div>
+      <div class="chart" id="jobFunnelChart"></div>
+    </div>
+    <div class="split">
+      <div class="card">
+        <h3>Experiment (cohort 2)</h3>
+        <div class="tbl-scroll"><table id="jobStagesExp"></table></div>
+      </div>
+      <div class="card">
+        <h3>Control</h3>
+        <div class="tbl-scroll"><table id="jobStagesCtl"></table></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Lead-form progression (exposed group)</h2>
+      <p class="sub">How far into the intent-aware form each lead got, and what the leads that reached
+        each step went on to do.</p>
+      <div class="chart" id="formFunnelChart"></div>
+      <div class="tbl-scroll" style="margin-top:6px"><table id="formStages"></table></div>
+      <div class="note" id="formNote"></div>
+    </div>
+    <div class="card">
+      <h2>Where every exposed lead sits right now</h2>
+      <p class="sub">Mutually exclusive — each lead counted once, at the furthest point it reached.</p>
+      <div class="tbl-scroll"><table id="positionTable"></table></div>
+      <div class="note" id="positionNote"></div>
     </div>
   </section>
 
@@ -454,6 +488,7 @@ function normalize(o) {
     raw: o,
     id: asStr(o.inquiry_request_id),
     date: asDate(o.lead_date_cst),
+    viewed: asDate(o.first_viewed_date_cst),
     market: asStr(o.market) || 'Unknown',
     cohort: asStr(o.experiment_cohort),
     isExp: asStr(o.experiment_cohort) === '2',
@@ -894,6 +929,171 @@ function renderOverview(s, E, C) {
   ]);
 }
 
+
+/* ------------------------------------------------------------------ funnel */
+
+/* Any answer captured from the intent-aware form. */
+const answeredForm = r => !!(r.symptoms || r.mileage || r.lastRepair || r.intent);
+
+/* Job progression. Strictly nested: every completed job was inspected, every
+   inspected job was booked - so this reads as a true funnel. */
+function jobStages(rows) {
+  const booked = rows.filter(r => r.booked);
+  return [
+    { label: 'Leads', rows, note: 'Lead created' },
+    { label: 'Booked an appointment', rows: booked, note: 'is_booked' },
+    { label: 'Kept the appointment', rows: booked.filter(r => !r.canceled), note: 'not canceled or withdrawn' },
+    { label: 'Inspection completed', rows: rows.filter(r => r.inspected), note: 'received_inspection' },
+    { label: 'Repair completed', rows: rows.filter(r => r.completed), note: 'invoiced above $0' }
+  ];
+}
+
+/* Form progression, exposed group only. Ends at repair intent: booking is NOT
+   nested inside it, because leads reach the scheduler without form answers. */
+function formStages(rows) {
+  const answered = rows.filter(answeredForm);
+  const noSymptoms = answered.filter(r => !r.symptoms);
+  return [
+    { label: 'Exposed leads', rows, note: 'cohort 2' },
+    { label: 'Form viewed', rows: rows.filter(r => r.viewed), note: 'first_viewed_date' },
+    { label: 'Answered a form question', rows: answered, note: 'symptoms, mileage or intent captured' },
+    { label: 'Reached mileage + last repair', rows: noSymptoms.filter(r => r.reachedOfframp),
+      note: 'no-symptoms branch only', branch: true },
+    { label: 'Stated repair intent', rows: rows.filter(r => r.intent), note: 'viocRepairIntent' }
+  ];
+}
+
+/* Mutually exclusive: where each lead sits right now, deepest state first. */
+const POSITIONS = [
+  { label: 'Repair completed', test: r => r.completed, tone: 'good' },
+  { label: 'Inspection completed — $0', test: r => r.inspected, tone: 'warn' },
+  { label: 'Canceled or withdrawn', test: r => r.canceled, tone: 'crit' },
+  { label: 'Appointment upcoming', test: r => r.booked, tone: '' },
+  { label: 'Deferred via off-ramp', test: r => r.deferred, tone: '' },
+  { label: 'Stated intent, never booked', test: r => r.intent, tone: '' },
+  { label: 'Answered mileage, never booked', test: r => r.mileage || r.lastRepair, tone: '' },
+  { label: 'Answered symptoms, never booked', test: r => r.symptoms, tone: '' },
+  { label: 'No form answers, never booked', test: () => true, tone: '' }
+];
+const positionOf = r => POSITIONS.find(p => p.test(r)).label;
+
+const SEQ = ['var(--seq-1)', 'var(--seq-2)', 'var(--seq-3)', 'var(--seq-4)', 'var(--seq-5)'];
+
+/* A branch stage sits off the main path, so the drop-off chain skips over it rather
+   than differencing against it - which is what produced a negative drop-off. */
+function stageRows(stages) {
+  let prevMain = null;
+  return stages.map(st => {
+    const n = st.rows.length;
+    const base = st.branch ? null : prevMain;
+    if (!st.branch) prevMain = n;
+    return { st, n, base };
+  });
+}
+
+const dropCell = (n, base, branch) =>
+  branch ? '<span class="chip">branch</span>'
+  : base === null ? dash
+  : base - n === 0 ? '<span class="chip">no drop</span>'
+  : `<span class="chip down">−${num(base - n)} · ${pct((base - n) / base, 0)}</span>`;
+
+/* Nested funnel: every stage contains all deeper ones, so per-stage outcome counts
+   would just repeat the terminal totals. Step conversion is what carries meaning. */
+function nestedStageTable(stages, total) {
+  return tableHTML(['Stage', 'Reached', '% of leads', 'Step conversion', 'Drop-off from previous'],
+    stageRows(stages).map(({ st, n, base }) => [
+      `${st.label}<div class="small muted">${st.note}</div>`,
+      `<strong>${num(n)}</strong>`,
+      pct(total ? n / total : 0, 0),
+      base === null ? dash : `<span class="chip${base && n / base >= 0.5 ? ' up' : ''}">${pct(base ? n / base : 0, 0)}</span>`,
+      dropCell(n, base, st.branch)
+    ]));
+}
+
+/* Form stages are not nested in the outcome, so what each cohort went on to do varies. */
+function outcomeStageTable(stages, total) {
+  return tableHTML(['Stage', 'Reached', '% of leads', 'Drop-off from previous',
+                    'Booked', 'Booking rate', 'Inspection completed', 'Repair completed', 'Conversion', 'Revenue', 'AOV'],
+    stageRows(stages).map(({ st, n, base }) => {
+      const m = metrics(st.rows);
+      return [
+        `${st.label}<div class="small muted">${st.note}</div>`,
+        `<strong>${num(n)}</strong>`,
+        pct(total ? n / total : 0, 0),
+        dropCell(n, base, st.branch),
+        num(m.booked), pct(m.bookingRate), num(m.inspected), num(m.completed),
+        pct(m.conversionRate), money(m.revenue), m.payingJobs ? money(m.aov) : dash
+      ];
+    }));
+}
+
+function renderFunnel(s, E, C) {
+  const exp = s.exp, ctl = s.ctl;
+
+  /* --- job funnel, both groups --- */
+  const je = jobStages(exp), jc = jobStages(ctl);
+  $('#jobFunnelSub').textContent =
+    `${num(exp.length)} experiment leads and ${num(ctl.length)} control leads, ${dlabel(s.start)} – ${dlabel(s.end)}.`;
+  $('#jobLegend').innerHTML =
+    `<span><i class="key" style="background:var(--s1)"></i>Experiment (cohort 2)</span>` +
+    `<span><i class="key" style="background:var(--s2)"></i>Control</span>`;
+  draw($('#jobFunnelChart'), groupedColumns({
+    cats: je.map(st => st.label),
+    series: [
+      { name: 'Experiment', color: 'var(--s1)', vals: je.map(st => exp.length ? st.rows.length / exp.length : 0) },
+      { name: 'Control',    color: 'var(--s2)', vals: jc.map(st => ctl.length ? st.rows.length / ctl.length : 0) }
+    ],
+    fmt: v => pct(v, 0), deltaFmt: pp,
+    tip: (i, j) => {
+      const st = (j ? jc : je)[i], base = (j ? ctl : exp).length;
+      return tipRow(j ? 'Control' : 'Experiment', `${num(st.rows.length)} leads`) +
+        tipRow('Share of leads', pct(base ? st.rows.length / base : 0));
+    }
+  }));
+  $('#jobStagesExp').innerHTML = nestedStageTable(je, exp.length);
+  $('#jobStagesCtl').innerHTML = nestedStageTable(jc, ctl.length);
+
+  /* --- form funnel, exposed only --- */
+  const fs = formStages(exp);
+  draw($('#formFunnelChart'), hBars({
+    items: fs.map(st => ({ label: st.label, value: st.rows.length, st })),
+    colors: SEQ, fmt: num, labelW: 215,
+    tip: d => tipRow('Leads reaching stage', num(d.value)) +
+      tipRow('Share of exposed', pct(exp.length ? d.value / exp.length : 0)) +
+      tipRow('Booked', num(metrics(d.st.rows).booked)) +
+      tipRow('Revenue', money(metrics(d.st.rows).revenue))
+  }));
+  $('#formStages').innerHTML = outcomeStageTable(fs, exp.length);
+
+  const bypass = exp.filter(r => r.booked && !answeredForm(r));
+  const bm = metrics(bypass), fm = metrics(exp.filter(r => r.booked && answeredForm(r)));
+  $('#formNote').innerHTML =
+    `<strong>Booking is not nested inside the form funnel.</strong>
+     ${num(bypass.length)} of ${num(metrics(exp).booked)} booked exposed leads reached the scheduler with
+     no form answer captured at all — so the form ladder above stops at repair intent rather than
+     pretending booking flows out of it. Those leads convert at ${pct(bm.conversionRate)} against
+     ${pct(fm.conversionRate)} for booked leads that did answer, on
+     ${money(bm.revenue)} vs ${money(fm.revenue)} of revenue.`;
+
+  /* --- where every lead sits right now --- */
+  /* POSITIONS stays deepest-first so first-match classification keeps working;
+     only the display order is flipped, so the table reads start of journey to end. */
+  const counts = POSITIONS.map(p => ({ p, rows: exp.filter(r => positionOf(r) === p.label) }))
+    .filter(x => x.rows.length).reverse();
+  $('#positionTable').innerHTML = tableHTML(
+    ['Where the lead sits now', 'Leads', '% of exposed', 'Revenue', 'AOV'],
+    counts.map(({ p, rows }) => {
+      const m = metrics(rows);
+      const dot = p.tone ? `<span class="find"><i style="background:var(--${p.tone})"></i>${p.label}</span>` : p.label;
+      return [dot, num(rows.length), pct(exp.length ? rows.length / exp.length : 0),
+        m.revenue ? money(m.revenue) : dash, m.payingJobs ? money(m.aov) : dash];
+    }));
+  const live = exp.filter(r => r.booked && !r.canceled && !r.inspected).length;
+  $('#positionNote').innerHTML =
+    `${num(live)} exposed lead(s) are still in flight — booked, not canceled, job not yet performed. ` +
+    `Their outcome is not counted in conversion or revenue yet, so the most recent period always looks weaker than it will settle at.`;
+}
+
 /* ----------------------------------------------------------------- cohorts */
 
 function renderCohorts(s) {
@@ -1196,9 +1396,9 @@ function renderFindings(s) {
      the post-job checklist, which is filled in on visits that end without a repair. In this range
      ${pct(zeroJobs.length ? has(zeroJobs) / zeroJobs.length : 0, 0)} of $0 jobs
      (${num(has(zeroJobs))} of ${num(zeroJobs.length)}) carry a finding, against
-     ${pct(paidJobs.length ? has(paidJobs) / paidJobs.length : 0, 0)} of jobs where a repair sold
+     ${pct(paidJobs.length ? has(paidJobs) / paidJobs.length : 0, 0)} of jobs where a repair was completed
      (${num(has(paidJobs))} of ${num(paidJobs.length)}). A recorded finding is therefore close to a
-     marker for "no repair sold", which forces conversion-by-finding toward zero no matter what the
+     marker for "no repair completed", which forces conversion-by-finding toward zero no matter what the
      tech actually found. Getting the post-inspection recommendation to flow is the fix.`;
 }
 
@@ -1374,6 +1574,7 @@ function render() {
   }
   const t = state.tab;
   if (t === 'overview') renderOverview(s, E, C);
+  if (t === 'funnel')   renderFunnel(s, E, C);
   if (t === 'cohorts')  renderCohorts(s);
   if (t === 'trend')    renderTrend(s);
   if (t === 'segments') renderSegments(s);
