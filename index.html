@@ -184,14 +184,6 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
       <select id="fMarket"><option value="ALL">All markets</option></select>
     </div>
     <div class="field">
-      <label for="fControl">Control group</label>
-      <select id="fControl">
-        <option value="all">All non-cohort-2 leads</option>
-        <option value="notexposed">NOT EXPOSED only</option>
-        <option value="exposed">Exposed cohorts only (1 / preview-1)</option>
-      </select>
-    </div>
-    <div class="field">
       <label>&nbsp;</label>
       <button id="reset">Reset</button>
     </div>
@@ -405,8 +397,7 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
           <option value="both">Experiment + Control</option>
           <option value="exp">Experiment only</option>
           <option value="ctl">Control only</option>
-          <option value="everything">Everything in range</option>
-        </select>
+          </select>
         <span class="small" id="rawCount"></span>
         <span class="spacer"></span>
         <button id="exportView">Export view (CSV)</button>
@@ -582,7 +573,7 @@ function chip(text, sign, good = sign) {
 
 const state = {
   rows: [], markets: [], cohorts: [], minDate: '', maxDate: '', source: null,
-  range: 'aug', start: '', end: '', market: 'ALL', control: 'all',
+  range: 'aug', start: '', end: '', market: 'ALL',
   tab: 'overview', trendMetric: 'conversionRate', trendGrain: 'week', trendGroup: 'exp',
   fetchedAt: null,
   rawQuery: '', rawGroup: 'both', rawSort: { key: 'date', dir: -1 }, rawPage: 0
@@ -605,12 +596,8 @@ function rangeBounds() {
   }
 }
 
-function inControl(r) {
-  if (r.isExp) return false;
-  if (state.control === 'notexposed') return r.cohort === 'NOT EXPOSED';
-  if (state.control === 'exposed')    return r.cohort === '1' || r.cohort === 'preview-1';
-  return true;
-}
+/* Control = every exposed lead outside cohort 2; NOT EXPOSED never reaches the page. */
+const inControl = r => !r.isExp;
 
 function scoped() {
   const [a, b] = rangeBounds();
@@ -1158,8 +1145,7 @@ function renderFunnel(s, E, C) {
 /* ----------------------------------------------------------------- cohorts */
 
 function renderCohorts(s) {
-  const names = [...new Set(s.all.map(r => r.cohort))]
-    .sort((a, b) => (a === 'NOT EXPOSED' ? 1 : b === 'NOT EXPOSED' ? -1 : a.localeCompare(b)));
+  const names = [...new Set(s.all.map(r => r.cohort))].sort((a, b) => a.localeCompare(b));
   const rows = names.map(c => {
     const g = s.all.filter(r => r.cohort === c);
     const m = metrics(g);
@@ -1533,7 +1519,6 @@ const colVal = (col, r) => col.val ? col.val(r) : r[col.key];
 function rawRows(s) {
   let rows = state.rawGroup === 'exp' ? s.exp
            : state.rawGroup === 'ctl' ? s.ctl
-           : state.rawGroup === 'everything' ? s.all
            : [...s.exp, ...s.ctl];
   const q = state.rawQuery.trim().toLowerCase();
   if (q) rows = rows.filter(r => RAW_COLUMNS.some(c => String(c.csv ? c.csv(r) : colVal(c, r)).toLowerCase().includes(q)));
@@ -1668,11 +1653,10 @@ function wire() {
   $('#fStart').onchange = e => { state.start = e.target.value; render(); };
   $('#fEnd').onchange   = e => { state.end = e.target.value; render(); };
   $('#fMarket').onchange = e => { state.market = e.target.value; state.rawPage = 0; render(); };
-  $('#fControl').onchange = e => { state.control = e.target.value; state.rawPage = 0; render(); };
   $('#reset').onclick = () => {
-    state.range = 'aug'; state.market = 'ALL'; state.control = 'all';
+    state.range = 'aug'; state.market = 'ALL';
     state.rawQuery = ''; state.rawGroup = 'both'; state.rawPage = 0;
-    $('#fRange').value = 'aug'; $('#fMarket').value = 'ALL'; $('#fControl').value = 'all';
+    $('#fRange').value = 'aug'; $('#fMarket').value = 'ALL';
     $('#rawSearch').value = ''; $('#rawGroup').value = 'both';
     $('#customWrap').hidden = true; $('#customWrap2').hidden = true;
     render();
@@ -1727,7 +1711,8 @@ async function fetchSource(src) {
   const body = await res.text();
   const raw = src.kind === 'json' ? JSON.parse(body) : parseCSV(body);
   if (!Array.isArray(raw) || !raw.length) throw new Error(`${src.label}: no rows`);
-  return { rows: raw.map(normalize).filter(r => r.date), stamp, src };
+  /* NOT EXPOSED leads are excluded dashboard-wide: control is the exposed cohorts (1 / preview-1). */
+  return { rows: raw.map(normalize).filter(r => r.date && r.cohort !== 'NOT EXPOSED'), stamp, src };
 }
 
 async function load(manual) {
