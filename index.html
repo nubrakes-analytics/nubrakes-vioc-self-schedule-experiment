@@ -463,7 +463,7 @@ const REPAIR_LABEL = {
   'br-4': 'Not sure', '': 'Not answered'
 };
 
-/* Off-ramp offered, per spec: no symptoms, lower mileage, serviced recently. */
+/* Deferred logic: eligibility is defined by the two follow-up answers. */
 const OFFRAMP_MILEAGE = ['mi-1', 'mi-2', 'mi-3'];
 const OFFRAMP_REPAIR  = ['br-1', 'br-2'];
 
@@ -499,12 +499,20 @@ function normalize(o) {
     inspected: asNum(o.received_inspection),
     revenue,
     zeroJob: asNum(o.received_inspection) === 1 && revenue <= 0,
-    /* answered both post-symptom questions, i.e. reached the off-ramp decision point */
-    reachedOfframp: !symptoms && !!mileage && !!lastRepair,
-    offered: !symptoms && OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair),
-    deferred: asStr(o.deferralsource) === 'vioc-off-ramp' && !!asDate(o.deferred_date_cst),
+    /* answered both follow-up questions */
+    reachedOfframp: !!mileage && !!lastRepair,
+    offrampEligible: OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair),
+    /* Took the deferral: eligible, with both a deferred date and off-ramp source. */
+    deferred: OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair) &&
+      asStr(o.deferralsource) === 'vioc-off-ramp' && !!asDate(o.deferred_date_cst),
     deferralSource: asStr(o.deferralsource),
     deferredDate: asDate(o.deferred_date_cst),
+    /* Eligible leads that stated intent are the scheduled-anyway/continued group. */
+    deferredScheduledAnyway: OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair) && !!asStr(o.viocrepairintent),
+    /* Deferred, never booked: eligible with neither repair intent nor either deferral field. */
+    deferredNeverBooked: OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair) &&
+      !asStr(o.viocrepairintent) && !asDate(o.deferred_date_cst) && !asStr(o.deferralsource),
+    offered: OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair),
     bookingSource: booked ? (selfBooked ? 'Self-booked' : 'ISA-booked') : 'Not booked',
     outcome: asStr(o.recommendation_outcome) || 'UNKNOWN / NOT RECORDED',
     status: asStr(o.job_status),
@@ -968,7 +976,9 @@ function symptomsNoStages(rows) {
   const reached = no.filter(r => r.reachedOfframp);
   const offered = reached.filter(r => r.offered);
   const took = offered.filter(r => r.deferred);
+  const declined = offered.filter(r => !r.deferred);
   const notOffered = reached.filter(r => !r.offered);
+  const nonOfferedIntent = notOffered.filter(r => r.intent);
   const booked = no.filter(r => r.booked);
   return [
     { label: 'No symptoms reported', rows: no, note: 'viocSymptoms = false' },
@@ -978,11 +988,11 @@ function symptomsNoStages(rows) {
       branch: true, slice: true, indent: 2, baseCount: reached.length },
     { label: 'Took the deferral', rows: took, note: "deferredAt, source 'vioc-off-ramp'",
       branch: true, slice: true, indent: 3, baseCount: offered.length },
-    { label: 'Declined, continued', rows: offered.filter(r => !r.deferred), note: 'scheduled anyway or dropped',
+    { label: 'Declined, continued', rows: declined, note: 'scheduled anyway or dropped',
       branch: true, slice: true, indent: 3, baseCount: offered.length },
     { label: 'Not offered, continued', rows: notOffered, note: 'went on to the intent question',
       branch: true, slice: true, indent: 2, baseCount: reached.length },
-    { label: 'Stated repair intent', rows: no.filter(r => r.intent), note: 'viocRepairIntent',
+    { label: 'Stated repair intent', rows: nonOfferedIntent, note: 'not offered the off-ramp; viocRepairIntent',
       branch: true, indent: 1, baseCount: no.length },
     { label: 'Booked an appointment', rows: booked, note: 'is_booked' },
     { label: 'Kept the appointment', rows: booked.filter(r => !r.canceled), note: 'not canceled' },
@@ -1267,13 +1277,14 @@ function renderSegments(s) {
   const took = offered.filter(r => r.deferred);
   segmentBlock('#segOfframp', [
     { label: 'Offered the off-ramp — took it', rows: took },
-    { label: 'Offered the off-ramp — declined', rows: offered.filter(r => !r.deferred) },
-    { label: 'Reached the question, not offered', rows: reached.filter(r => !r.offered) },
+    { label: 'Deferred, scheduled anyways', rows: offered.filter(r => r.deferredScheduledAnyway) },
+    { label: 'Deferred, never booked', rows: offered.filter(r => r.deferredNeverBooked) },
+    { label: 'Not offered, continued', rows: reached.filter(r => !r.offered) },
     { label: 'Never reached the question', rows: exp.filter(r => !r.reachedOfframp) }
   ], 'Off-ramp',
-    `Offered = <code>viocSymptoms = false</code> AND <code>viocMileageRange</code> in
-     (mi-1, mi-2, mi-3) AND <code>viocLastBrakeRepair</code> in (br-1, br-2). Took it =
-     <code>deferredAt</code> populated with <code>deferralSource = 'vioc-off-ramp'</code>.`);
+    `Eligible for the off-ramp = <code>viocMileageRange</code> in (mi-1, mi-2, mi-3) AND
+     <code>viocLastBrakeRepair</code> in (br-1, br-2). Took it = eligible with
+     <code>deferredAt</code> populated and <code>deferralSource = 'vioc-off-ramp'</code>.`);
 
   /* 3. booking source */
   segmentBlock('#segSource', [
@@ -1309,6 +1320,7 @@ function renderOfframp(s) {
   const offered = exp.filter(r => r.offered);
   const took = offered.filter(r => r.deferred);
   const declined = offered.filter(r => !r.deferred);
+  const notOffered = reached.filter(r => !r.offered);
   const bookedAnyway = declined.filter(r => r.booked);
   const notBooked = exp.filter(r => !r.booked);
   const strays = exp.filter(r => r.deferred && !r.offered);
@@ -1318,9 +1330,8 @@ function renderOfframp(s) {
 
   $('#offrampFunnel').innerHTML = tableHTML(['Stage', 'Leads', 'Share of exposed'], [
     ['Exposed leads (cohort 2)', num(exp.length), '100%'],
-    ['Answered no symptoms', num(exp.filter(r => !r.symptoms).length), pct(exp.length ? exp.filter(r => !r.symptoms).length / exp.length : 0)],
-    ['Reached mileage + last-repair questions', num(reached.length), pct(exp.length ? reached.length / exp.length : 0)],
-    ['<strong>Offered the off-ramp</strong>', `<strong>${num(offered.length)}</strong>`, pct(exp.length ? offered.length / exp.length : 0)],
+    ['Answered mileage + last-repair questions', num(reached.length), pct(exp.length ? reached.length / exp.length : 0)],
+    ['<strong>Offered the off-ramp</strong> <span class="muted">(mi-1/2/3 + br-1/2)</span>', `<strong>${num(offered.length)}</strong>`, pct(exp.length ? offered.length / exp.length : 0)],
     ['<strong>Took the deferral</strong>', `<strong>${num(took.length)}</strong>`, pct(exp.length ? took.length / exp.length : 0)]
   ]);
 
@@ -1335,10 +1346,11 @@ function renderOfframp(s) {
 
   $('#offrampOutcome').innerHTML = tableHTML(['What happened to the leads offered it', ...FUNNEL_HEAD], [
     ['Took the deferral', ...funnelCells(metrics(took))],
-    ['Declined, scheduled anyway', ...funnelCells(metrics(bookedAnyway))],
-    ['Declined, never booked', ...funnelCells(metrics(declined.filter(r => !r.booked)))],
-    ['<strong>Comparison: reached the question, not offered</strong>',
-      ...funnelCells(metrics(reached.filter(r => !r.offered))).map(c => `<strong>${c}</strong>`)]
+    ['Declined, continued — scheduled anyway', ...funnelCells(metrics(bookedAnyway))],
+    ['Declined, continued — dropped', ...funnelCells(metrics(declined.filter(r => !r.booked)))],
+    ['Not offered, continued', ...funnelCells(metrics(notOffered))],
+    ['<strong>Deferred, never booked</strong>',
+      ...funnelCells(metrics(offered.filter(r => r.deferredNeverBooked))).map(c => `<strong>${c}</strong>`)]
   ]);
 
   const insp = bookedAnyway.filter(r => r.inspected);
