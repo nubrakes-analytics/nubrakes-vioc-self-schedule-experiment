@@ -197,6 +197,8 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
     <button class="tab" role="tab" data-tab="segments" aria-selected="false">Segments</button>
     <button class="tab" role="tab" data-tab="offramp" aria-selected="false">Off-ramp</button>
     <button class="tab" role="tab" data-tab="findings" aria-selected="false">Findings</button>
+    <button class="tab" role="tab" data-tab="intent" aria-selected="false">Intent</button>
+    <button class="tab" role="tab" data-tab="zero" aria-selected="false">$0 Inspections</button>
     <button class="tab" role="tab" data-tab="markets" aria-selected="false">Markets</button>
     <button class="tab" role="tab" data-tab="raw" aria-selected="false">Raw data</button>
   </nav>
@@ -256,7 +258,6 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
       <div class="chart" id="noFunnelChart"></div>
       <div class="tbl-scroll" style="margin-top:6px"><table id="noStages"></table></div>
       <div class="note" id="noNote"></div>
-    </div>
     </div>
     <div class="card">
       <h2>Where every exposed lead sits right now</h2>
@@ -374,6 +375,107 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
     </div>
   </section>
 
+  <section class="panel" id="p-intent" hidden>
+    <div class="card">
+      <h2>Red findings by stated intent</h2>
+      <p class="sub" id="intentFindSub"></p>
+      <div class="legend" id="intentRedLegend"></div>
+      <div class="chart" id="intentRedChart"></div>
+      <div class="note">Red share is measured against inspections that carry a recorded finding, so the
+        large not-recorded block does not drag every bar toward zero. Cells built on a handful of
+        inspections move on a single job — read the bars with the counts underneath.</div>
+    </div>
+
+    <div class="card">
+      <h2>Finding mix by intent</h2>
+      <div class="legend" id="intentMixLegend"></div>
+      <div class="split">
+        <div>
+          <h3>Symptoms reported</h3>
+          <p class="sub" id="intentYesSub"></p>
+          <div class="chart" id="intentYesChart"></div>
+          <div class="tbl-scroll" style="margin-top:10px"><table id="intentYesTable"></table></div>
+        </div>
+        <div>
+          <h3>No symptoms reported</h3>
+          <p class="sub" id="intentNoSub"></p>
+          <div class="chart" id="intentNoChart"></div>
+          <div class="tbl-scroll" style="margin-top:10px"><table id="intentNoTable"></table></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Every intent x symptoms cell</h2>
+      <div class="tbl-scroll"><table id="intentMatrix"></table></div>
+      <div class="note" id="intentMatrixNote"></div>
+    </div>
+
+    <div class="card">
+      <h2>What each cell went on to do</h2>
+      <div class="tbl-scroll"><table id="intentConv"></table></div>
+      <div class="note">Repair conversion here is measured against completed inspections, not leads —
+        the question is what the tech found and whether it turned into work, so booking and show-up
+        drop-off is deliberately held out of the denominator.</div>
+    </div>
+
+    <div class="card warn">
+      <div class="note crit" id="intentWarn"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-zero" hidden>
+    <div class="grid" id="zeroTiles"></div>
+
+    <div class="card">
+      <h2>What the tech found on the visits that billed nothing</h2>
+      <p class="sub" id="zeroFindSub"></p>
+      <div class="legend" id="zeroFindLegend"></div>
+      <div class="chart" id="zeroFindChart"></div>
+      <div class="tbl-scroll" style="margin-top:12px"><table id="zeroFindTable"></table></div>
+      <div class="note" id="zeroFindNote"></div>
+    </div>
+
+    <div class="card">
+      <h2>Recoverable, or correctly closed?</h2>
+      <p class="sub">Every $0 visit in the exposed group, read against what the tech recorded.</p>
+      <div class="tbl-scroll"><table id="zeroRecoverTable"></table></div>
+      <div class="note" id="zeroRecoverNote"></div>
+    </div>
+
+    <div class="card">
+      <h2>What predicts a $0 outcome</h2>
+      <p class="sub" id="zeroPredictSub"></p>
+      <div class="chart" id="zeroPredictChart"></div>
+      <div class="tbl-scroll" style="margin-top:12px"><table id="zeroPredictTable"></table></div>
+      <div class="note" id="zeroPredictNote"></div>
+    </div>
+
+    <div class="card">
+      <h2>$0 visits where something got in the way</h2>
+      <p class="sub" id="zeroOpsSub"></p>
+      <div class="tbl-scroll"><table id="zeroOpsTable"></table></div>
+      <div class="note" id="zeroOpsNote"></div>
+    </div>
+
+    <div class="card">
+      <h2>$0 rate over time</h2>
+      <p class="sub">Bucketed on lead date. The most recent bucket is partial — jobs booked in it have
+        not all been performed yet.</p>
+      <div class="ctlrow"><div class="seg" id="zeroGrain"></div></div>
+      <div class="legend" id="zeroTrendLegend"></div>
+      <div class="chart" id="zeroTrendChart"></div>
+    </div>
+
+    <div class="card">
+      <h2>$0 rate by market</h2>
+      <div class="chart" id="zeroMarketChart"></div>
+      <div class="tbl-scroll" style="margin-top:12px"><table id="zeroMarketTable"></table></div>
+      <p class="small" style="margin:10px 0 0">Markets with fewer than 20 experiment jobs performed in
+        the selected range are marked <span class="muted">(small n)</span>.</p>
+    </div>
+  </section>
+
   <section class="panel" id="p-markets" hidden>
     <div class="card">
       <h2>AOV by market (Experiment)</h2>
@@ -463,7 +565,7 @@ const REPAIR_LABEL = {
   'br-4': 'Not sure', '': 'Not answered'
 };
 
-/* Deferred logic: eligibility is defined by the two follow-up answers. */
+/* Off-ramp offered, per spec: no symptoms, lower mileage, serviced recently. */
 const OFFRAMP_MILEAGE = ['mi-1', 'mi-2', 'mi-3'];
 const OFFRAMP_REPAIR  = ['br-1', 'br-2'];
 
@@ -499,23 +601,16 @@ function normalize(o) {
     inspected: asNum(o.received_inspection),
     revenue,
     zeroJob: asNum(o.received_inspection) === 1 && revenue <= 0,
-    /* answered both follow-up questions */
-    reachedOfframp: !!mileage && !!lastRepair,
-    offrampEligible: OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair),
-    /* Took the deferral: eligible, with both a deferred date and off-ramp source. */
-    deferred: OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair) &&
-      asStr(o.deferralsource) === 'vioc-off-ramp' && !!asDate(o.deferred_date_cst),
+    /* answered both post-symptom questions, i.e. reached the off-ramp decision point */
+    reachedOfframp: !symptoms && !!mileage && !!lastRepair,
+    offered: !symptoms && OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair),
+    deferred: asStr(o.deferralsource) === 'vioc-off-ramp' && !!asDate(o.deferred_date_cst),
     deferralSource: asStr(o.deferralsource),
     deferredDate: asDate(o.deferred_date_cst),
-    /* Eligible leads that stated intent are the scheduled-anyway/continued group. */
-    deferredScheduledAnyway: OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair) && !!asStr(o.viocrepairintent),
-    /* Deferred, never booked: eligible with neither repair intent nor either deferral field. */
-    deferredNeverBooked: OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair) &&
-      !asStr(o.viocrepairintent) && !asDate(o.deferred_date_cst) && !asStr(o.deferralsource),
-    offered: OFFRAMP_MILEAGE.includes(mileage) && OFFRAMP_REPAIR.includes(lastRepair),
     bookingSource: booked ? (selfBooked ? 'Self-booked' : 'ISA-booked') : 'Not booked',
     outcome: asStr(o.recommendation_outcome) || 'UNKNOWN / NOT RECORDED',
     status: asStr(o.job_status),
+    withdrawReason: asStr(o.withdrawreason),
     appt: asDate(o.appointment_start_date_cst),
     link: asStr(o.job_link)
   };
@@ -583,6 +678,7 @@ const state = {
   rows: [], markets: [], cohorts: [], minDate: '', maxDate: '', source: null,
   range: 'aug', start: '', end: '', market: 'ALL',
   tab: 'overview', trendMetric: 'conversionRate', trendGrain: 'week', trendGroup: 'exp',
+  zeroGrain: 'week',
   fetchedAt: null,
   rawQuery: '', rawGroup: 'both', rawSort: { key: 'date', dir: -1 }, rawPage: 0
 };
@@ -672,11 +768,11 @@ function ticks(maxVal, count = 4) {
   return { max, vals };
 }
 
-function groupedColumns({ cats, series, fmt, deltaFmt, tip }) {
+function groupedColumns({ cats, series, fmt, deltaFmt, deltaLabel = 'vs control', tip }) {
   return w => {
     const h = 260, pad = { t: 14, r: 12, b: 44, l: 46 };
     const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
-    const t = ticks(Math.max(...series.flatMap(s => s.vals), 0.0001));
+    const t = ticks(Math.max(...series.flatMap(s => s.vals).filter(v => v != null), 0.0001));
     const max = t.max;
     const svg = el('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
     const y = v => pad.t + ih - (v / max) * ih;
@@ -692,15 +788,16 @@ function groupedColumns({ cats, series, fmt, deltaFmt, tip }) {
       const total = series.length * bw + 2 * (series.length - 1);
       series.forEach((s, j) => {
         const v = s.vals[i], x = cx - total / 2 + j * (bw + 2);
+        if (v == null) return;
         const bh = Math.max(1, (v / max) * ih);
         const p = el('path', { d: colPath(x, pad.t + ih - bh, bw, bh, 4), fill: s.color });
         bindTip(p, `<b>${c}</b>${tip(i, j)}`);
         svg.appendChild(p);
       });
       svg.appendChild(text(cx, h - 22, c, { ...LBL_FONT, 'text-anchor': 'middle' }));
-      if (series.length === 2) {
+      if (series.length === 2 && series[0].vals[i] != null && series[1].vals[i] != null) {
         const d = series[0].vals[i] - series[1].vals[i];
-        svg.appendChild(text(cx, h - 7, (deltaFmt || (v => (v >= 0 ? '+' : '−') + fmt(Math.abs(v))))(d) + ' vs control',
+        svg.appendChild(text(cx, h - 7, (deltaFmt || (v => (v >= 0 ? '+' : '−') + fmt(Math.abs(v))))(d) + ' ' + deltaLabel,
           { ...AXIS_FONT, 'text-anchor': 'middle' }));
       }
     });
@@ -976,9 +1073,7 @@ function symptomsNoStages(rows) {
   const reached = no.filter(r => r.reachedOfframp);
   const offered = reached.filter(r => r.offered);
   const took = offered.filter(r => r.deferred);
-  const declined = offered.filter(r => !r.deferred);
   const notOffered = reached.filter(r => !r.offered);
-  const nonOfferedIntent = notOffered.filter(r => r.intent);
   const booked = no.filter(r => r.booked);
   return [
     { label: 'No symptoms reported', rows: no, note: 'viocSymptoms = false' },
@@ -988,11 +1083,11 @@ function symptomsNoStages(rows) {
       branch: true, slice: true, indent: 2, baseCount: reached.length },
     { label: 'Took the deferral', rows: took, note: "deferredAt, source 'vioc-off-ramp'",
       branch: true, slice: true, indent: 3, baseCount: offered.length },
-    { label: 'Declined, continued', rows: declined, note: 'scheduled anyway or dropped',
+    { label: 'Declined, continued', rows: offered.filter(r => !r.deferred), note: 'scheduled anyway or dropped',
       branch: true, slice: true, indent: 3, baseCount: offered.length },
     { label: 'Not offered, continued', rows: notOffered, note: 'went on to the intent question',
       branch: true, slice: true, indent: 2, baseCount: reached.length },
-    { label: 'Stated repair intent', rows: nonOfferedIntent, note: 'not offered the off-ramp; viocRepairIntent',
+    { label: 'Stated repair intent', rows: no.filter(r => r.intent), note: 'viocRepairIntent',
       branch: true, indent: 1, baseCount: no.length },
     { label: 'Booked an appointment', rows: booked, note: 'is_booked' },
     { label: 'Kept the appointment', rows: booked.filter(r => !r.canceled), note: 'not canceled' },
@@ -1195,8 +1290,8 @@ function weekStart(d) {
   dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
   return dt.toISOString().slice(0, 10);
 }
-const periodKey = d => state.trendGrain === 'month' ? d.slice(0, 7) : weekStart(d);
-const periodLabel = k => state.trendGrain === 'month' ? mlabel(k) : dlabel(k);
+const periodKey = (d, grain = state.trendGrain) => grain === 'month' ? d.slice(0, 7) : weekStart(d);
+const periodLabel = (k, grain = state.trendGrain) => grain === 'month' ? mlabel(k) : dlabel(k);
 
 function renderTrend(s) {
   $('#trendGrain').innerHTML = [['week', 'Weekly'], ['month', 'Monthly']].map(([k, l]) =>
@@ -1277,14 +1372,13 @@ function renderSegments(s) {
   const took = offered.filter(r => r.deferred);
   segmentBlock('#segOfframp', [
     { label: 'Offered the off-ramp — took it', rows: took },
-    { label: 'Deferred, scheduled anyways', rows: offered.filter(r => r.deferredScheduledAnyway) },
-    { label: 'Deferred, never booked', rows: offered.filter(r => r.deferredNeverBooked) },
-    { label: 'Not offered, continued', rows: reached.filter(r => !r.offered) },
+    { label: 'Offered the off-ramp — declined', rows: offered.filter(r => !r.deferred) },
+    { label: 'Reached the question, not offered', rows: reached.filter(r => !r.offered) },
     { label: 'Never reached the question', rows: exp.filter(r => !r.reachedOfframp) }
   ], 'Off-ramp',
-    `Eligible for the off-ramp = <code>viocMileageRange</code> in (mi-1, mi-2, mi-3) AND
-     <code>viocLastBrakeRepair</code> in (br-1, br-2). Took it = eligible with
-     <code>deferredAt</code> populated and <code>deferralSource = 'vioc-off-ramp'</code>.`);
+    `Offered = <code>viocSymptoms = false</code> AND <code>viocMileageRange</code> in
+     (mi-1, mi-2, mi-3) AND <code>viocLastBrakeRepair</code> in (br-1, br-2). Took it =
+     <code>deferredAt</code> populated with <code>deferralSource = 'vioc-off-ramp'</code>.`);
 
   /* 3. booking source */
   segmentBlock('#segSource', [
@@ -1320,7 +1414,6 @@ function renderOfframp(s) {
   const offered = exp.filter(r => r.offered);
   const took = offered.filter(r => r.deferred);
   const declined = offered.filter(r => !r.deferred);
-  const notOffered = reached.filter(r => !r.offered);
   const bookedAnyway = declined.filter(r => r.booked);
   const notBooked = exp.filter(r => !r.booked);
   const strays = exp.filter(r => r.deferred && !r.offered);
@@ -1330,8 +1423,9 @@ function renderOfframp(s) {
 
   $('#offrampFunnel').innerHTML = tableHTML(['Stage', 'Leads', 'Share of exposed'], [
     ['Exposed leads (cohort 2)', num(exp.length), '100%'],
-    ['Answered mileage + last-repair questions', num(reached.length), pct(exp.length ? reached.length / exp.length : 0)],
-    ['<strong>Offered the off-ramp</strong> <span class="muted">(mi-1/2/3 + br-1/2)</span>', `<strong>${num(offered.length)}</strong>`, pct(exp.length ? offered.length / exp.length : 0)],
+    ['Answered no symptoms', num(exp.filter(r => !r.symptoms).length), pct(exp.length ? exp.filter(r => !r.symptoms).length / exp.length : 0)],
+    ['Reached mileage + last-repair questions', num(reached.length), pct(exp.length ? reached.length / exp.length : 0)],
+    ['<strong>Offered the off-ramp</strong>', `<strong>${num(offered.length)}</strong>`, pct(exp.length ? offered.length / exp.length : 0)],
     ['<strong>Took the deferral</strong>', `<strong>${num(took.length)}</strong>`, pct(exp.length ? took.length / exp.length : 0)]
   ]);
 
@@ -1346,11 +1440,10 @@ function renderOfframp(s) {
 
   $('#offrampOutcome').innerHTML = tableHTML(['What happened to the leads offered it', ...FUNNEL_HEAD], [
     ['Took the deferral', ...funnelCells(metrics(took))],
-    ['Declined, continued — scheduled anyway', ...funnelCells(metrics(bookedAnyway))],
-    ['Declined, continued — dropped', ...funnelCells(metrics(declined.filter(r => !r.booked)))],
-    ['Not offered, continued', ...funnelCells(metrics(notOffered))],
-    ['<strong>Deferred, never booked</strong>',
-      ...funnelCells(metrics(offered.filter(r => r.deferredNeverBooked))).map(c => `<strong>${c}</strong>`)]
+    ['Declined, scheduled anyway', ...funnelCells(metrics(bookedAnyway))],
+    ['Declined, never booked', ...funnelCells(metrics(declined.filter(r => !r.booked)))],
+    ['<strong>Comparison: reached the question, not offered</strong>',
+      ...funnelCells(metrics(reached.filter(r => !r.offered))).map(c => `<strong>${c}</strong>`)]
   ]);
 
   const insp = bookedAnyway.filter(r => r.inspected);
@@ -1459,6 +1552,397 @@ function renderFindings(s) {
      (${num(has(paidJobs))} of ${num(paidJobs.length)}). A recorded finding is therefore close to a
      marker for "no repair completed", which forces conversion-by-finding toward zero no matter what the
      tech actually found. Getting the post-inspection recommendation to flow is the fix.`;
+}
+
+/* ------------------------------------------------------------------ intent */
+
+/* Stated intent is only captured on the experiment flow, and the form asks it after the
+   symptoms fork - so every cut on this tab is cohort 2, split on that fork first. */
+const INTENT_ORDER = ['ready-to-fix', 'open', 'inspection-only', ''];
+
+const intentCells = (rows, symptoms) => INTENT_ORDER.map(k => ({
+  key: k, label: INTENT_LABEL[k],
+  rows: rows.filter(r => r.symptoms === symptoms && r.intent === k)
+})).filter(g => g.rows.length);
+
+/* Red share is taken against recorded findings only - "not recorded" is the largest block
+   on most cells and would otherwise swamp every comparison. Null means nothing recorded. */
+function redShare(insp) {
+  const c = outcomeCounts(insp);
+  const recorded = insp.length - c[3];
+  return recorded ? { share: c[0] / recorded, red: c[0], recorded } : null;
+}
+
+const INTENT_HEAD = ['Intent', 'Leads', 'Inspections', 'Inspection rate',
+  ...OUTCOMES.map(o => o.label.split(' — ')[0]), 'Red share of recorded'];
+
+function intentCellCells(g) {
+  const insp = g.rows.filter(r => r.inspected);
+  const c = outcomeCounts(insp), rs = redShare(insp);
+  return [num(g.rows.length), num(insp.length),
+    pct(g.rows.length ? insp.length / g.rows.length : 0, 0),
+    ...c.map(num), rs ? pct(rs.share, 0) : dash];
+}
+
+function intentTableRows(cells) {
+  const rows = cells.map(g => [g.label, ...intentCellCells(g)]);
+  const all = { rows: cells.flatMap(g => g.rows) };
+  rows.push(['<strong>All</strong>', ...intentCellCells(all).map(v => `<strong>${v}</strong>`)]);
+  return rows;
+}
+
+function renderIntent(s) {
+  const exp = s.exp;
+  const yes = intentCells(exp, true), no = intentCells(exp, false);
+  const cell = (sym, k) => exp.filter(r => r.symptoms === sym && r.intent === k);
+  const inspOf = (sym, k) => cell(sym, k).filter(r => r.inspected);
+  const allInsp = exp.filter(r => r.inspected);
+  const base = redShare(allInsp);
+
+  /* --- headline: red share by intent, symptoms vs no symptoms --- */
+  const cats = INTENT_ORDER.filter(k => redShare(inspOf(true, k)) || redShare(inspOf(false, k)));
+  $('#intentFindSub').textContent =
+    `${num(exp.length)} exposed leads, ${dlabel(s.start)} – ${dlabel(s.end)} · ` +
+    `${num(allInsp.length)} completed inspections, ` +
+    `${base ? num(base.recorded) : 0} with a recorded finding`;
+  $('#intentRedLegend').innerHTML =
+    `<span><i class="key" style="background:var(--s1)"></i>Symptoms reported</span>` +
+    `<span><i class="key" style="background:var(--s2)"></i>No symptoms reported</span>`;
+  draw($('#intentRedChart'), groupedColumns({
+    cats: cats.map(k => INTENT_LABEL[k]),
+    series: [
+      { name: 'Symptoms', color: 'var(--s1)',
+        vals: cats.map(k => (redShare(inspOf(true, k)) || {}).share ?? null) },
+      { name: 'No symptoms', color: 'var(--s2)',
+        vals: cats.map(k => (redShare(inspOf(false, k)) || {}).share ?? null) }
+    ],
+    fmt: v => pct(v, 0), deltaFmt: pp, deltaLabel: 'vs no symptoms',
+    tip: (i, j) => {
+      const sym = j === 0;
+      const insp = inspOf(sym, cats[i]), rs = redShare(insp);
+      return tipRow(sym ? 'Symptoms reported' : 'No symptoms',
+          rs ? pct(rs.share) : 'no recorded findings') +
+        tipRow('Red findings', rs ? `${num(rs.red)} of ${num(rs.recorded)} recorded` : dash) +
+        tipRow('Inspections', num(insp.length)) +
+        tipRow('Leads', num(cell(sym, cats[i]).length));
+    }
+  }));
+
+  /* --- full finding mix, one ladder per branch of the symptoms fork --- */
+  $('#intentMixLegend').innerHTML = OUTCOMES.map(o =>
+    `<span><i class="key" style="background:${o.color}"></i>${o.label}</span>`).join('');
+  const mix = (mount, cells) => draw($(mount), stackedBars({
+    items: cells.map(g => {
+      const insp = g.rows.filter(r => r.inspected);
+      return { label: g.label, sub: `${num(insp.length)} of ${num(g.rows.length)} leads inspected`,
+        total: insp.length, values: outcomeCounts(insp) };
+    }).filter(d => d.total),
+    keys: OUTCOMES, fmt: v => pct(v, 0), labelW: 150
+  }));
+  mix('#intentYesChart', yes);
+  mix('#intentNoChart', no);
+
+  const branchSub = cells => {
+    const all = cells.flatMap(g => g.rows), insp = all.filter(r => r.inspected), rs = redShare(insp);
+    return `${num(all.length)} leads · ${num(insp.length)} inspections · ` +
+      (rs ? `${pct(rs.share, 0)} red of ${num(rs.recorded)} recorded` : 'no recorded findings');
+  };
+  $('#intentYesSub').textContent = branchSub(yes);
+  $('#intentNoSub').textContent = branchSub(no);
+  $('#intentYesTable').innerHTML = tableHTML(INTENT_HEAD, intentTableRows(yes));
+  $('#intentNoTable').innerHTML = tableHTML(INTENT_HEAD, intentTableRows(no));
+
+  /* --- every cell of the matrix, red share flagged against the cohort-wide rate --- */
+  const branches = [[true, 'Yes'], [false, 'No']];
+  $('#intentMatrix').innerHTML = tableHTML(
+    ['Symptoms', 'Intent', 'Leads', 'Inspections', 'Inspection rate',
+      ...OUTCOMES.map(o => o.label.split(' — ')[0]), 'Red share of recorded'],
+    branches.flatMap(([sym, lbl]) => intentCells(exp, sym).map(g => {
+      const rs = redShare(g.rows.filter(r => r.inspected));
+      const cells = intentCellCells(g);
+      cells[cells.length - 1] = rs
+        ? `<span class="chip${base && rs.share > base.share ? ' down' : ''}">${pct(rs.share, 0)}</span>`
+        : dash;
+      return [lbl, g.label, ...cells];
+    })));
+  $('#intentMatrixNote').innerHTML =
+    (base
+      ? `Red share is highlighted where it runs above the cohort-wide rate of
+         <strong>${pct(base.share, 0)}</strong> (${num(base.red)} of ${num(base.recorded)} recorded findings). `
+      : `No inspection in this range carries a recorded finding, so there is no red share to compare. `) +
+    `<strong>Read the "no symptoms" rows with care.</strong> <code>viocSymptoms</code> is
+     <code>false</code> both for a lead that answered No and for one that dropped out before the
+     question, and "Not answered" intent means the lead never reached the intent step at all — so the
+     No × Not-answered cell is mostly abandonment, not a stated preference.`;
+
+  /* --- what each cell went on to do --- */
+  $('#intentConv').innerHTML = tableHTML(
+    ['Symptoms × intent', 'Leads', 'Booked', 'Booking rate', 'Inspections', 'Repairs completed',
+      'Repair conversion (of inspections)', '$0 jobs', 'Revenue', 'AOV'],
+    branches.flatMap(([sym, lbl]) => intentCells(exp, sym).map(g => {
+      const m = metrics(g.rows);
+      return [`${lbl} · ${g.label}`, num(m.leads), num(m.booked), pct(m.bookingRate, 0),
+        num(m.inspected), num(m.completed),
+        m.inspected ? pct(m.completed / m.inspected) : dash,
+        num(m.zeroJobs), money(m.revenue), m.payingJobs ? money(m.aov) : dash];
+    })));
+
+  /* --- same extract caveat as the findings tab, scoped to the exposed group --- */
+  const zeroJobs = allInsp.filter(r => r.zeroJob);
+  const paidJobs = allInsp.filter(r => !r.zeroJob);
+  const has = rows => rows.filter(r => r.outcome !== 'UNKNOWN / NOT RECORDED').length;
+  $('#intentWarn').innerHTML =
+    `<strong>Findings on this tab inherit the recommendation-source problem.</strong>
+     <code>postInspection_finalRecomendation</code> is empty on every row, so
+     <code>recommendation_outcome</code> falls back to <code>postJobChecklist_finalRecomendation</code>,
+     which is filled in on visits that end without a repair. Across the exposed group,
+     ${pct(zeroJobs.length ? has(zeroJobs) / zeroJobs.length : 0, 0)} of $0 jobs
+     (${num(has(zeroJobs))} of ${num(zeroJobs.length)}) carry a finding against
+     ${pct(paidJobs.length ? has(paidJobs) / paidJobs.length : 0, 0)} of jobs that ended in a repair
+     (${num(has(paidJobs))} of ${num(paidJobs.length)}). Ready-to-fix leads convert most often, so they
+     are also the most likely to be missing a finding — which biases their red share downward.
+     Compare the intents on the finding mix and the counts, not on red share alone, until the
+     post-inspection recommendation flows.`;
+}
+
+/* --------------------------------------------------------------- $0 jobs */
+
+/* A $0 job is a completed inspection that closed without an invoice: the van showed up,
+   the tech looked at the brakes, and nothing was sold. It is roughly half of every job
+   performed, so it gets read on its own terms rather than as leftover conversion. */
+const jobsOf = rows => rows.filter(r => r.inspected);
+const zeroOf = rows => rows.filter(r => r.zeroJob);
+const recordedOf = rows => rows.filter(r => r.outcome !== 'UNKNOWN / NOT RECORDED');
+
+/* Red and Yellow on a $0 visit are work the tech says the car needs and nobody bought.
+   Green is a visit that correctly found nothing to sell - a clean close, not a miss. */
+const RECOVERABLE = ['RED', 'YELLOW'];
+const recoverableOf = rows => rows.filter(r => RECOVERABLE.includes(r.outcome));
+
+const ZERO_READ = {
+  RED: 'Needed work now — walked unsold',
+  YELLOW: 'Needed work soon — walked unsold',
+  GREEN: 'Nothing to sell — correctly closed',
+  'UNKNOWN / NOT RECORDED': 'No checklist filed — unknown'
+};
+
+const smallN = (n, floor) => n < floor ? ' <span class="muted">(small n)</span>' : '';
+
+function renderZero(s) {
+  const exp = s.exp, ctl = s.ctl, all = [...exp, ...ctl];
+  const E = metrics(exp), C = metrics(ctl);
+  const eJobs = jobsOf(exp), eZero = zeroOf(exp), ePaid = eJobs.filter(r => !r.zeroJob);
+  const cJobs = jobsOf(ctl), cZero = zeroOf(ctl), cPaid = cJobs.filter(r => !r.zeroJob);
+  const rec = recoverableOf(eZero);
+  const green = eZero.filter(r => r.outcome === 'GREEN');
+  /* Size the pool at whichever AOV the data can actually support. */
+  const aov = E.payingJobs ? E.aov : metrics(all).aov;
+
+  /* ------------------------------------------------------------------ tiles */
+  const dz = E.zeroRate - C.zeroRate;
+  const zsign = Math.abs(dz) < 1e-9 ? 0 : dz > 0 ? 1 : -1;
+  const recShare = eZero.length ? rec.length / eZero.length : 0;
+  const filedZero = eZero.length ? recordedOf(eZero).length / eZero.length : 0;
+  const filedPaid = ePaid.length ? recordedOf(ePaid).length / ePaid.length : 0;
+  const tiles = [
+    { label: '$0 inspections', value: num(eZero.length), hero: true,
+      body: chip(`of ${num(eJobs.length)} jobs performed`, 0) },
+    { label: '$0 rate', value: eJobs.length ? pct(E.zeroRate, 0) : '—',
+      body: chip(pp(dz) + ' vs control', zsign, -zsign) },
+    { label: 'Red or Yellow, unsold', value: num(rec.length),
+      body: chip(`${pct(recShare, 0)} of $0 visits`, 0) },
+    { label: 'Green — nothing to sell', value: num(green.length),
+      body: chip(`${pct(eZero.length ? green.length / eZero.length : 0, 0)} of $0 visits`, 0) },
+    { label: 'Indicative value at AOV', value: aov ? money(rec.length * aov) : '—',
+      body: chip(aov ? `${num(rec.length)} × ${money(aov)}` : 'no AOV in range', 0) },
+    { label: 'Checklist filed on $0 visits', value: eZero.length ? pct(filedZero, 0) : '—',
+      body: chip(`${pct(filedPaid, 0)} on billed jobs`, 0) }
+  ];
+  $('#zeroTiles').innerHTML = tiles.map(t =>
+    `<div class="card tile"><div class="label">${t.label}</div>
+      <div class="value${t.hero ? ' hero' : ''}">${t.value}</div>${t.body}</div>`).join('');
+
+  /* --------------------------------------------- findings, $0 against billed */
+  const findGroups = [
+    { label: 'Experiment — $0 visits', rows: eZero },
+    { label: 'Control — $0 visits', rows: cZero },
+    { label: 'Experiment — jobs that billed', rows: ePaid },
+    { label: 'Control — jobs that billed', rows: cPaid }
+  ].filter(g => g.rows.length);
+  $('#zeroFindSub').textContent =
+    `${num(eZero.length)} experiment and ${num(cZero.length)} control $0 visits, ` +
+    `${dlabel(s.start)} – ${dlabel(s.end)}.`;
+  $('#zeroFindLegend').innerHTML = OUTCOMES.map(o =>
+    `<span><i class="key" style="background:${o.color}"></i>${o.label}</span>`).join('');
+  draw($('#zeroFindChart'), stackedBars({
+    items: findGroups.map(g => ({ label: g.label, sub: `${num(g.rows.length)} jobs`,
+      total: g.rows.length, values: outcomeCounts(g.rows) })),
+    keys: OUTCOMES, fmt: v => pct(v, 0), labelW: 205
+  }));
+  $('#zeroFindTable').innerHTML = tableHTML(
+    ['Group', 'Jobs', ...OUTCOMES.map(o => o.label.split(' — ')[0]),
+      'Checklist filed', 'Red or Yellow of filed'],
+    findGroups.map(g => {
+      const c = outcomeCounts(g.rows), filed = g.rows.length - c[3];
+      return [g.label, num(g.rows.length), ...c.map(num),
+        pct(g.rows.length ? filed / g.rows.length : 0, 0),
+        filed ? pct((c[0] + c[1]) / filed, 0) : dash];
+    }));
+  $('#zeroFindNote').innerHTML =
+    `<strong>The recording bias that breaks the Findings tab is what makes this tab work.</strong>
+     <code>postJobChecklist_finalRecomendation</code> is filed on ${pct(filedZero, 0)} of $0 visits
+     and ${pct(filedPaid, 0)} of jobs that billed, because the checklist is what a tech completes when
+     the visit ends without a repair. That ruins conversion-by-finding — but it means the $0 population
+     is the one group whose findings are close to fully observed, so the mix above is a fair read of
+     what those vans actually found.`;
+
+  /* ------------------------------------------------- recoverable vs settled */
+  $('#zeroRecoverTable').innerHTML = tableHTML(
+    ['What the tech recorded', 'How to read it', '$0 visits', 'Share of $0', 'Indicative value at AOV'],
+    [...OUTCOMES.map(o => {
+      const set = eZero.filter(r => r.outcome === o.key);
+      return [`<span class="find"><i style="background:${o.color}"></i>${o.label}</span>`,
+        `<span class="small">${ZERO_READ[o.key]}</span>`, num(set.length),
+        pct(eZero.length ? set.length / eZero.length : 0, 0),
+        RECOVERABLE.includes(o.key) && aov ? money(set.length * aov) : dash];
+    }),
+    ['<strong>Recoverable (Red + Yellow)</strong>', '<span class="small">Demand that walked</span>',
+      `<strong>${num(rec.length)}</strong>`, `<strong>${pct(recShare, 0)}</strong>`,
+      aov ? `<strong>${money(rec.length * aov)}</strong>` : dash]]);
+  $('#zeroRecoverNote').innerHTML =
+    `The value column is <strong>sizing, not a forecast</strong> — it prices every unsold Red and Yellow
+     at the experiment AOV of ${aov ? money(aov) : '—'}, which assumes each one would have converted at
+     the same ticket. Treat it as the ceiling on what a follow-up motion could chase, not as lost revenue.
+     ${green.length ? `The ${num(green.length)} Green visits are the opposite case: the inspection did its
+     job and there was nothing to sell, so they belong in the cost of the offer, not in a recovery plan.` : ''}`;
+
+  /* --------------------------------------------------------- what predicts $0 */
+  const segs = [
+    ...['ready-to-fix', 'open', 'inspection-only', ''].map(k =>
+      ({ label: 'Intent: ' + INTENT_LABEL[k], rows: exp.filter(r => r.intent === k) })),
+    { label: 'Symptoms reported', rows: exp.filter(r => r.symptoms) },
+    { label: 'No symptoms reported', rows: exp.filter(r => !r.symptoms) },
+    { label: 'Self-booked', rows: exp.filter(r => r.selfBooked) },
+    { label: 'ISA-booked', rows: exp.filter(r => !r.selfBooked && r.booked) },
+    { label: 'Offered the off-ramp', rows: exp.filter(r => r.offered) },
+    { label: 'Not offered the off-ramp', rows: exp.filter(r => !r.offered) }
+  ].map(g => ({ ...g, m: metrics(g.rows), jobs: jobsOf(g.rows).length }))
+   .filter(g => g.jobs)
+   .sort((a, b) => b.m.zeroRate - a.m.zeroRate);
+
+  $('#zeroPredictSub').textContent =
+    `Exposed group only — the form answers do not exist on the control side. ` +
+    `$0 rate is measured against jobs performed, so booking and cancellation drop-off is held out.`;
+  draw($('#zeroPredictChart'), hBars({
+    items: segs.map(g => ({ label: g.label, value: g.m.zeroRate, g })),
+    fmt: v => pct(v, 0), labelW: 185,
+    tip: d => tipRow('Jobs performed', num(d.g.jobs)) +
+      tipRow('$0 jobs', num(d.g.m.zeroJobs)) +
+      tipRow('Red or Yellow, unsold', num(recoverableOf(zeroOf(d.g.rows)).length)) +
+      tipRow('Revenue', money(d.g.m.revenue)) +
+      tipRow('AOV', d.g.m.payingJobs ? money(d.g.m.aov) : '—')
+  }));
+  $('#zeroPredictTable').innerHTML = tableHTML(
+    ['Segment', 'Leads', 'Jobs performed', '$0 jobs', '$0 rate', 'Red or Yellow, unsold',
+      'Jobs that billed', 'Revenue', 'AOV'],
+    segs.map(g => [
+      g.label + smallN(g.jobs, 20), num(g.m.leads), num(g.jobs), num(g.m.zeroJobs),
+      `<span class="chip${g.m.zeroRate > E.zeroRate ? ' down' : ' up'}">${pct(g.m.zeroRate, 0)}</span>`,
+      num(recoverableOf(zeroOf(g.rows)).length), num(g.m.payingJobs), money(g.m.revenue),
+      g.m.payingJobs ? money(g.m.aov) : dash
+    ]));
+  $('#zeroPredictNote').innerHTML =
+    `Rows are flagged against the exposed group's own $0 rate of <strong>${pct(E.zeroRate, 0)}</strong>.
+     Stated intent is the sharpest split on the page — it is captured before the van is dispatched, so
+     it is the one lever available at booking time rather than after the visit. Segments built on a
+     handful of jobs move on a single outcome; read the flag with the count next to it.`;
+
+  /* ---------------------------------------------- $0 visits that hit a snag */
+  const allZero = zeroOf(all);
+  const withdrawn = allZero.filter(r => r.withdrawReason);
+  const reasons = [...new Set(withdrawn.map(r => r.withdrawReason))]
+    .map(k => ({ k, n: withdrawn.filter(r => r.withdrawReason === k).length }))
+    .sort((a, b) => b.n - a.n);
+  const hq = withdrawn.filter(r => /^HQ:/.test(r.withdrawReason)).length;
+  const cust = withdrawn.length - hq;
+  $('#zeroOpsSub').textContent =
+    `${num(withdrawn.length)} of ${num(allZero.length)} $0 visits across both groups also carry a ` +
+    `withdraw reason — the visit is recorded as performed, but something interrupted it.`;
+  $('#zeroOpsTable').innerHTML = withdrawn.length
+    ? tableHTML(['Withdraw reason', '$0 visits', 'Share of withdrawn', 'Share of all $0 visits'],
+        reasons.map(r => [r.k, num(r.n), pct(r.n / withdrawn.length, 0),
+          pct(allZero.length ? r.n / allZero.length : 0, 1)]))
+    : `<tbody><tr><td class="muted">No $0 visit in this range carries a withdraw reason.</td></tr></tbody>`;
+  $('#zeroOpsNote').innerHTML = withdrawn.length
+    ? `<strong>${num(hq)} are ours and ${num(cust)} are the customer's.</strong> The HQ side —
+       technician availability, weather, service-window misses — is the part that is fixable without
+       changing anything about the offer, and it is the cleanest ${pct(allZero.length ? hq / allZero.length : 0, 1)}
+       of the $0 pool to attack first. The remaining ${num(allZero.length - withdrawn.length)} $0 visits
+       have no reason recorded: those are ordinary inspections that simply did not sell.`
+    : `Every $0 visit in this range ran to completion — none were interrupted, so the $0 outcome is
+       about what the tech found and what the customer decided, not about operations.`;
+
+  /* ------------------------------------------------------------------ trend */
+  $('#zeroGrain').innerHTML = [['week', 'Weekly'], ['month', 'Monthly']].map(([k, l]) =>
+    `<button data-grain="${k}" aria-pressed="${state.zeroGrain === k}">${l}</button>`).join('');
+  $$('#zeroGrain button').forEach(b => b.onclick = () => { state.zeroGrain = b.dataset.grain; renderZero(scoped()); });
+
+  const buckets = new Map();
+  for (const r of all) {
+    const k = periodKey(r.date, state.zeroGrain);
+    if (!buckets.has(k)) buckets.set(k, { e: [], c: [] });
+    buckets.get(k)[r.isExp ? 'e' : 'c'].push(r);
+  }
+  const keys = [...buckets.keys()].sort();
+  const cats = keys.map(k => periodLabel(k, state.zeroGrain));
+  const series = side => keys.map(k => {
+    const m = metrics(buckets.get(k)[side]);
+    return m.inspected ? m.zeroRate : null;
+  });
+  const eVals = series('e'), cVals = series('c');
+  $('#zeroTrendLegend').innerHTML =
+    `<span><i class="key" style="background:var(--s1)"></i>Experiment (cohort 2)</span>` +
+    `<span><i class="key" style="background:var(--s2)"></i>Control</span>`;
+  draw($('#zeroTrendChart'), lineChart({
+    cats,
+    series: [{ name: 'Exp', color: 'var(--s1)', vals: eVals },
+             { name: 'Ctl', color: 'var(--s2)', vals: cVals }],
+    fmt: v => pct(v, 0),
+    tip: i => {
+      const b = buckets.get(keys[i]), me = metrics(b.e), mc = metrics(b.c);
+      return `<div class="small" style="margin:-2px 0 5px">${state.zeroGrain === 'month' ? '' : 'Week of '}${cats[i]}</div>` +
+        tipRow('Experiment', me.inspected ? `${pct(me.zeroRate, 0)} · ${num(me.zeroJobs)} of ${num(me.inspected)}` : '—') +
+        tipRow('Control', mc.inspected ? `${pct(mc.zeroRate, 0)} · ${num(mc.zeroJobs)} of ${num(mc.inspected)}` : '—');
+    }
+  }));
+
+  /* ----------------------------------------------------------------- markets */
+  const mkts = [...new Set(exp.map(r => r.market))].sort()
+    .map(nm => {
+      const rows = exp.filter(r => r.market === nm);
+      return { nm, m: metrics(rows), rows, jobs: jobsOf(rows).length,
+               c: metrics(ctl.filter(r => r.market === nm)) };
+    })
+    .filter(g => g.jobs)
+    .sort((a, b) => b.m.zeroRate - a.m.zeroRate);
+  draw($('#zeroMarketChart'), hBars({
+    items: mkts.map(g => ({ label: g.nm, value: g.m.zeroRate, g })),
+    fmt: v => pct(v, 0), labelW: 115,
+    tip: d => tipRow('Jobs performed', num(d.g.jobs)) + tipRow('$0 jobs', num(d.g.m.zeroJobs)) +
+      tipRow('Red or Yellow, unsold', num(recoverableOf(zeroOf(d.g.rows)).length)) +
+      tipRow('Revenue', money(d.g.m.revenue)) +
+      tipRow('Control $0 rate', d.g.c.inspected ? pct(d.g.c.zeroRate, 0) : '—')
+  }));
+  $('#zeroMarketTable').innerHTML = tableHTML(
+    ['Market', 'Leads', 'Jobs performed', '$0 jobs', '$0 rate', 'Red or Yellow, unsold',
+      'Revenue', 'AOV', 'Control $0 rate'],
+    mkts.map(g => [
+      g.nm + smallN(g.jobs, 20), num(g.m.leads), num(g.jobs), num(g.m.zeroJobs),
+      `<span class="chip${g.m.zeroRate > E.zeroRate ? ' down' : ' up'}">${pct(g.m.zeroRate, 0)}</span>`,
+      num(recoverableOf(zeroOf(g.rows)).length), money(g.m.revenue),
+      g.m.payingJobs ? money(g.m.aov) : dash,
+      g.c.inspected ? pct(g.c.zeroRate, 0) : dash
+    ]));
 }
 
 /* ----------------------------------------------------------------- markets */
@@ -1638,6 +2122,8 @@ function render() {
   if (t === 'segments') renderSegments(s);
   if (t === 'offramp')  renderOfframp(s);
   if (t === 'findings') renderFindings(s);
+  if (t === 'intent')   renderIntent(s);
+  if (t === 'zero')     renderZero(s);
   if (t === 'markets')  renderMarkets(s);
   if (t === 'raw')      renderRaw(s);
   $('#statusDetail').textContent =
