@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIOC Self-Schedule Experiment</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M16 19h8l8 25 8-25h8L36 51h-8z' fill='white'/%3E%3C/svg%3E">
 <style>
 :root{
   color-scheme:light;
@@ -145,14 +146,14 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
   <header class="head">
     <div>
       <h1>VIOC Self-Schedule Experiment</h1>
-      <p class="sub">Cohort 2 = Experiment · live from Redash query 1621</p>
+      <p class="sub">Variant 2 = Experiment · post-fix inquiries from September 17, 2026</p>
       <div class="status" id="status">
         <span class="pill"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></span>
         <span id="statusDetail"></span>
       </div>
     </div>
     <div class="headbtns">
-      <button id="refresh" title="Re-pull the query from Redash">Refresh data</button>
+      <button id="refresh" title="Reload the current data extract">Reload data</button>
       <button id="theme" title="Toggle light / dark">Dark</button>
     </div>
   </header>
@@ -163,11 +164,10 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
     <div class="field">
       <label for="fRange">Date range</label>
       <select id="fRange">
-        <option value="aug">August 2026</option>
+        <option value="all">Post-fix period</option>
         <option value="l7">Last 7 days</option>
         <option value="l30">Last 30 days</option>
         <option value="l90">Last 90 days</option>
-        <option value="all">Full experiment</option>
         <option value="custom">Custom…</option>
       </select>
     </div>
@@ -203,7 +203,7 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
     <button class="tab" role="tab" data-tab="raw" aria-selected="false">Raw data</button>
   </nav>
 
-  <div id="app"><div class="loading">Pulling fresh results from Redash…</div></div>
+  <div id="app"><div class="loading">Loading the current experiment extract…</div></div>
   <div class="card" id="empty" hidden>
     <h2>No leads in this selection</h2>
     <p class="sub" id="emptyMsg"></p>
@@ -220,11 +220,11 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
     <div class="card">
       <h2>Executive scorecard</h2>
       <div class="tbl-scroll"><table id="scorecard"></table></div>
-      <div class="note"><strong>Definitions:</strong> booking / conversion / self-booked rates are per lead.
+      <div class="note"><strong>Definitions:</strong> booking / conversion / self-booked rates are per inquiry.
         Cancel rate = canceled ÷ booked. A completed inspection either ends in a completed repair
         (always invoiced above $0) or closes at $0 — so <strong>inspected = completed +
-        $0 jobs</strong>, and the $0 rate is measured against jobs performed. Revenue and AOV count the
-        completed side only.</div>
+        $0 jobs</strong>, and the $0 rate is measured against jobs performed. Invoiced amount and average
+        invoice count completed jobs only.</div>
     </div>
   </section>
 
@@ -270,8 +270,8 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
   <section class="panel" id="p-cohorts" hidden>
     <div class="card">
       <h2>Every cohort, same metric set</h2>
-      <p class="sub">Cohort 2 is the only group served the intent-aware lead form. Cohorts 1 and preview-1
-        were exposed to earlier stages of the rollout and carry no form answers.</p>
+      <p class="sub">Variant 2 is the experiment experience. Variant 1 is the control. Assignments come
+        directly from each inquiry record, and only post-fix inquiries are included.</p>
       <div class="tbl-scroll"><table id="cohortTable"></table></div>
     </div>
     <div class="card">
@@ -478,7 +478,7 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
 
   <section class="panel" id="p-markets" hidden>
     <div class="card">
-      <h2>AOV by market (Experiment)</h2>
+      <h2>Average invoice by market (Experiment)</h2>
       <div class="chart" id="marketChart"></div>
     </div>
     <div class="card">
@@ -513,7 +513,7 @@ h3{font-size:13px;margin:0 0 10px;font-weight:650}
 <div id="tip" role="tooltip"></div>
 <script>
 /* VIOC Self-Schedule experiment dashboard.
-   Data is pulled fresh from /api/data.csv (a live Redash proxy) on every page load.
+   Data is loaded from the published NuBrakes analytics JSON feed.
    All metrics are computed in the browser so the filters are instant. */
 
 const $  = (s, r = document) => r.querySelector(s);
@@ -582,16 +582,15 @@ function normalize(o) {
   const lastRepair = asStr(o.vioclastbrakerepair);
   const booked     = asNum(o.is_booked);
   const selfBooked = asBool(o.appointment_self_booked);
-  const revenue    = asNum(o.revenue);
+  const revenue    = asNum(o.invoiced_amount);
   const completed  = asNum(o.is_completed);
   return {
     raw: o,
     id: asStr(o.inquiry_request_id),
     date: asDate(o.lead_date_cst),
-    viewed: asDate(o.first_viewed_date_cst),
     market: asStr(o.market) || 'Unknown',
     cohort: asStr(o.experiment_cohort),
-    isExp: asStr(o.experiment_cohort) === '2',
+    isExp: asStr(o.experiment_cohort).toLowerCase() === 'vioc_booking_flow:2',
     symptoms, mileage, lastRepair,
     intent: asStr(o.viocrepairintent),
     selfBooked,
@@ -676,7 +675,7 @@ function chip(text, sign, good = sign) {
 
 const state = {
   rows: [], markets: [], cohorts: [], minDate: '', maxDate: '', source: null,
-  range: 'aug', start: '', end: '', market: 'ALL',
+  range: 'all', start: '', end: '', market: 'ALL',
   tab: 'overview', trendMetric: 'conversionRate', trendGrain: 'week', trendGroup: 'exp',
   zeroGrain: 'week',
   fetchedAt: null,
@@ -691,7 +690,6 @@ function rangeBounds() {
     return d.toISOString().slice(0, 10);
   };
   switch (state.range) {
-    case 'aug':    return ['2026-08-01', '2026-08-31'];
     case 'l7':     return [shift(7), max];
     case 'l30':    return [shift(30), max];
     case 'l90':    return [shift(90), max];
@@ -700,8 +698,8 @@ function rangeBounds() {
   }
 }
 
-/* Control = every exposed lead outside cohort 2; NOT EXPOSED never reaches the page. */
-const inControl = r => !r.isExp;
+/* Only the two valid inquiry-level experiment assignments enter the comparison. */
+const inControl = r => r.cohort.toLowerCase() === 'vioc_booking_flow:1';
 
 function scoped() {
   const [a, b] = rangeBounds();
@@ -938,7 +936,7 @@ function tableHTML(head, rows) {
 
 /* The metric set the brief asks for, in the order it asks for it. */
 const FUNNEL_HEAD = ['Leads', 'Booked', 'Booking rate', 'Canceled', 'Cancel rate', 'Inspected',
-  'Completed', 'Conversion', '$0 jobs', '$0 rate', 'Revenue', 'AOV'];
+  'Completed', 'Conversion', '$0 jobs', '$0 rate', 'Invoiced amount', 'Average invoice'];
 const funnelCells = m => [
   num(m.leads), num(m.booked), pct(m.bookingRate), num(m.canceled),
   m.booked ? pct(m.cancelRate) : dash, num(m.inspected), num(m.completed), pct(m.conversionRate),
@@ -973,7 +971,7 @@ function renderOverview(s, E, C) {
     { label: 'Booking rate', value: pct(E.bookingRate), d: E.bookingRate - C.bookingRate, fmt: pp },
     { label: 'Cancel rate', value: E.booked ? pct(E.cancelRate) : '—', d: E.cancelRate - C.cancelRate, fmt: pp, invert: true },
     { label: 'Conversion rate', value: pct(E.conversionRate), d: E.conversionRate - C.conversionRate, fmt: pp },
-    { label: 'AOV', value: E.payingJobs ? money(E.aov) : '—', d: E.aov - C.aov, fmt: moneyD },
+    { label: 'Average invoice', value: E.payingJobs ? money(E.aov) : '—', d: E.aov - C.aov, fmt: moneyD },
     { label: '$0 job rate', value: E.inspected ? pct(E.zeroRate, 0) : '—', d: E.zeroRate - C.zeroRate, fmt: pp, invert: true }
   ];
   $('#tiles').innerHTML = tiles.map(t => {
@@ -1014,11 +1012,11 @@ function renderOverview(s, E, C) {
     row('Canceled jobs', E.canceled, C.canceled, num, -1),
     row('Completed jobs', E.completed, C.completed, num, 1),
     row('$0 jobs (inspected, no invoice)', E.zeroJobs, C.zeroJobs, num, -1),
-    row('Revenue', E.revenue, C.revenue, money, 1),
+    row('Invoiced amount', E.revenue, C.revenue, money, 1),
     row('Booking rate', E.bookingRate, C.bookingRate, pct, 1),
     row('Cancel rate (of booked)', E.cancelRate, C.cancelRate, pct, -1),
     row('Conversion rate', E.conversionRate, C.conversionRate, pct, 1),
-    row('AOV (per paying job)', E.aov, C.aov, money, 1),
+    row('Average invoice (per paying job)', E.aov, C.aov, money, 1),
     row('$0 rate (of jobs performed)', E.zeroRate, C.zeroRate, pct, -1),
     row('Completed inspections', E.inspected, C.inspected, num, 1),
     row('Inspection rate', E.inspectionRate, C.inspectionRate, pct, 1),
@@ -1151,7 +1149,7 @@ function nestedStageTable(stages, total) {
 /* Form stages are not nested in the outcome, so what each cohort went on to do varies. */
 function outcomeStageTable(stages, total) {
   return tableHTML(['Stage', 'Reached', '% of leads', 'Drop-off from previous',
-                    'Booked', 'Booking rate', 'Inspection completed', 'Repair completed', 'Conversion', 'Revenue', 'AOV'],
+                    'Booked', 'Booking rate', 'Inspection completed', 'Repair completed', 'Conversion', 'Invoiced amount', 'Average invoice'],
     stageRows(stages).map(({ st, n, base }) => {
       const m = metrics(st.rows);
       return [
@@ -1200,7 +1198,7 @@ function renderFunnel(s, E, C) {
     colors: SEQ, fmt: num, labelW: 190,
     tip: d => tipRow('Leads reaching stage', num(d.value)) +
       tipRow('Share of branch', pct(base ? d.value / base : 0)) +
-      tipRow('Revenue', money(metrics(d.st.rows).revenue))
+      tipRow('Invoiced amount', money(metrics(d.st.rows).revenue))
   }));
   ladder('#yesFunnelChart', ys, yes.length);
   ladder('#noFunnelChart', ns, no.length);
@@ -1234,7 +1232,7 @@ function renderFunnel(s, E, C) {
   const counts = POSITIONS.map(p => ({ p, rows: exp.filter(r => positionOf(r) === p.label) }))
     .filter(x => x.rows.length).reverse();
   $('#positionTable').innerHTML = tableHTML(
-    ['Where the lead sits now', 'Leads', '% of exposed', 'Revenue', 'AOV'],
+    ['Where the lead sits now', 'Leads', '% of exposed', 'Invoiced amount', 'Average invoice'],
     counts.map(({ p, rows }) => {
       const m = metrics(rows);
       const dot = p.tone ? `<span class="find"><i style="background:var(--${p.tone})"></i>${p.label}</span>` : p.label;
@@ -1256,7 +1254,7 @@ function renderCohorts(s) {
     const m = metrics(g);
     const form = g.filter(r => r.intent || r.mileage || r.symptoms).length;
     return [
-      `${c === '2' ? '<strong>2 — intent-aware form</strong>' : c}` +
+      `${c.toLowerCase() === 'vioc_booking_flow:2' ? '<strong>Variant 2 — experiment</strong>' : 'Variant 1 — control'}` +
         (form ? '' : ' <span class="muted">(no form data)</span>'),
       ...funnelCells(m)
     ];
@@ -1282,7 +1280,7 @@ const TREND_METRICS = [
   ['cancelRate', 'Cancel rate'],
   ['conversionRate', 'Conversion rate'],
   ['selfBookedRate', 'Self-booked rate'],
-  ['aov', 'AOV']
+  ['aov', 'Average invoice']
 ];
 
 function weekStart(d) {
@@ -1402,7 +1400,7 @@ function renderSegments(s) {
     fmt: v => pct(v), labelW: 175,
     tip: d => tipRow('Leads', num(d.m.leads)) + tipRow('Booked', num(d.m.booked)) +
       tipRow('Completed inspections', num(d.m.inspected)) + tipRow('Completed jobs', num(d.m.completed)) +
-      tipRow('Revenue', money(d.m.revenue)) + tipRow('AOV', d.m.payingJobs ? money(d.m.aov) : '—')
+      tipRow('Invoiced amount', money(d.m.revenue)) + tipRow('Average invoice', d.m.payingJobs ? money(d.m.aov) : '—')
   }));
 }
 
@@ -1534,7 +1532,7 @@ function renderFindings(s) {
   $('#findingsSeg').innerHTML = tableHTML(head, findingRows(segGroups));
 
   $('#findingsConv').innerHTML = tableHTML(
-    ['Group × finding', 'Inspections', 'Converted to repair', 'Conversion', 'Revenue', 'AOV'],
+    ['Group × finding', 'Inspections', 'Converted to repair', 'Conversion', 'Invoiced amount', 'Average invoice'],
     conversionRows(groups));
 
   const allInsp = [...exp, ...ctl].filter(r => r.inspected);
@@ -1678,7 +1676,7 @@ function renderIntent(s) {
   /* --- what each cell went on to do --- */
   $('#intentConv').innerHTML = tableHTML(
     ['Symptoms × intent', 'Leads', 'Booked', 'Booking rate', 'Inspections', 'Repairs completed',
-      'Repair conversion (of inspections)', '$0 jobs', 'Revenue', 'AOV'],
+      'Repair conversion (of inspections)', '$0 jobs', 'Invoiced amount', 'Average invoice'],
     branches.flatMap(([sym, lbl]) => intentCells(exp, sym).map(g => {
       const m = metrics(g.rows);
       return [`${lbl} · ${g.label}`, num(m.leads), num(m.booked), pct(m.bookingRate, 0),
@@ -1839,12 +1837,12 @@ function renderZero(s) {
     tip: d => tipRow('Jobs performed', num(d.g.jobs)) +
       tipRow('$0 jobs', num(d.g.m.zeroJobs)) +
       tipRow('Red or Yellow, unsold', num(recoverableOf(zeroOf(d.g.rows)).length)) +
-      tipRow('Revenue', money(d.g.m.revenue)) +
-      tipRow('AOV', d.g.m.payingJobs ? money(d.g.m.aov) : '—')
+      tipRow('Invoiced amount', money(d.g.m.revenue)) +
+      tipRow('Average invoice', d.g.m.payingJobs ? money(d.g.m.aov) : '—')
   }));
   $('#zeroPredictTable').innerHTML = tableHTML(
     ['Segment', 'Leads', 'Jobs performed', '$0 jobs', '$0 rate', 'Red or Yellow, unsold',
-      'Jobs that billed', 'Revenue', 'AOV'],
+      'Jobs that billed', 'Invoiced amount', 'Average invoice'],
     segs.map(g => [
       g.label + smallN(g.jobs, 20), num(g.m.leads), num(g.jobs), num(g.m.zeroJobs),
       `<span class="chip${g.m.zeroRate > E.zeroRate ? ' down' : ' up'}">${pct(g.m.zeroRate, 0)}</span>`,
@@ -1930,12 +1928,12 @@ function renderZero(s) {
     fmt: v => pct(v, 0), labelW: 115,
     tip: d => tipRow('Jobs performed', num(d.g.jobs)) + tipRow('$0 jobs', num(d.g.m.zeroJobs)) +
       tipRow('Red or Yellow, unsold', num(recoverableOf(zeroOf(d.g.rows)).length)) +
-      tipRow('Revenue', money(d.g.m.revenue)) +
+      tipRow('Invoiced amount', money(d.g.m.revenue)) +
       tipRow('Control $0 rate', d.g.c.inspected ? pct(d.g.c.zeroRate, 0) : '—')
   }));
   $('#zeroMarketTable').innerHTML = tableHTML(
     ['Market', 'Leads', 'Jobs performed', '$0 jobs', '$0 rate', 'Red or Yellow, unsold',
-      'Revenue', 'AOV', 'Control $0 rate'],
+      'Invoiced amount', 'Average invoice', 'Control $0 rate'],
     mkts.map(g => [
       g.nm + smallN(g.jobs, 20), num(g.m.leads), num(g.jobs), num(g.m.zeroJobs),
       `<span class="chip${g.m.zeroRate > E.zeroRate ? ' down' : ' up'}">${pct(g.m.zeroRate, 0)}</span>`,
@@ -1959,12 +1957,12 @@ function renderMarkets(s) {
     items: rows.map(r => ({ label: r.market, value: r.e.aov, r })),
     fmt: money, labelW: 110,
     tip: d => tipRow('Experiment leads', num(d.r.e.leads)) +
-      tipRow('Completed jobs', num(d.r.e.payingJobs)) + tipRow('Revenue', money(d.r.e.revenue)) +
+      tipRow('Completed jobs', num(d.r.e.payingJobs)) + tipRow('Invoiced amount', money(d.r.e.revenue)) +
       tipRow('Conversion', pct(d.r.e.conversionRate)) +
-      tipRow('Control AOV', d.r.c.payingJobs ? money(d.r.c.aov) : '—')
+      tipRow('Control average invoice', d.r.c.payingJobs ? money(d.r.c.aov) : '—')
   }));
 
-  $('#marketTable').innerHTML = tableHTML(['Market', ...FUNNEL_HEAD, 'Control AOV'],
+  $('#marketTable').innerHTML = tableHTML(['Market', ...FUNNEL_HEAD, 'Control average invoice'],
     rows.map(r => [
       r.market + (r.e.leads < 30 ? ' <span class="muted">(small n)</span>' : ''),
       ...funnelCells(r.e),
@@ -2001,7 +1999,7 @@ const RAW_COLUMNS = [
       return c ? `<span class="find"><i style="background:${c}"></i>${r.outcome[0] + r.outcome.slice(1).toLowerCase()}</span>`
                : '<span class="muted">Not recorded</span>';
     } },
-  { key: 'revenue',    label: 'Revenue',     num: true, csv: r => r.revenue || 0,
+  { key: 'revenue',    label: 'Invoiced amount', num: true, csv: r => r.revenue || 0,
     cell: r => r.revenue ? money(r.revenue) : dash },
   { key: 'zeroJob',    label: '$0 job',      num: true, val: r => r.zeroJob ? 1 : 0, csv: r => yesNo(r.zeroJob) },
   { key: 'id',         label: 'Inquiry id',  csv: r => r.id },
@@ -2152,9 +2150,9 @@ function wire() {
   $('#fEnd').onchange   = e => { state.end = e.target.value; render(); };
   $('#fMarket').onchange = e => { state.market = e.target.value; state.rawPage = 0; render(); };
   $('#reset').onclick = () => {
-    state.range = 'aug'; state.market = 'ALL';
+    state.range = 'all'; state.market = 'ALL';
     state.rawQuery = ''; state.rawGroup = 'both'; state.rawPage = 0;
-    $('#fRange').value = 'aug'; $('#fMarket').value = 'ALL';
+    $('#fRange').value = 'all'; $('#fMarket').value = 'ALL';
     $('#rawSearch').value = ''; $('#rawGroup').value = 'both';
     $('#customWrap').hidden = true; $('#customWrap2').hidden = true;
     render();
@@ -2191,14 +2189,13 @@ function banner(msg) {
   b.className = 'show'; b.innerHTML = msg;
 }
 
-/* Data sources, tried in order. The local proxy gives live Redash results; the published
-   JSON is CORS-enabled, so the page also works as plain static hosting (GitHub Pages)
-   with no proxy and no API key in the browser. */
+/* Current post-fix query extract. */
 const SOURCES = [
-  { label: 'Live Redash', kind: 'csv',  url: '/api/data.csv' },
-  { label: 'Published snapshot', kind: 'json', url: './data/fact_nubrakes_vioc_self_schedule_daily.json' },
-  { label: 'Published snapshot', kind: 'json',
-    url: 'https://nubrakes-analytics.github.io/NuBrakes-Copilot/data/fact_nubrakes_vioc_self_schedule_daily.json' }
+  {
+    label: 'NuBrakes analytics feed',
+    kind: 'json',
+    url: 'https://nubrakes-analytics.github.io/NuBrakes-Copilot/data/fact_nubrakes_vioc_self_schedule_daily.json'
+  }
 ];
 
 async function fetchSource(src) {
@@ -2209,8 +2206,13 @@ async function fetchSource(src) {
   const body = await res.text();
   const raw = src.kind === 'json' ? JSON.parse(body) : parseCSV(body);
   if (!Array.isArray(raw) || !raw.length) throw new Error(`${src.label}: no rows`);
-  /* NOT EXPOSED leads are excluded dashboard-wide: control is the exposed cohorts (1 / preview-1). */
-  return { rows: raw.map(normalize).filter(r => r.date && r.cohort !== 'NOT EXPOSED'), stamp, src };
+  return {
+    rows: raw.map(normalize).filter(r =>
+      r.date && ['vioc_booking_flow:1', 'vioc_booking_flow:2'].includes(r.cohort.toLowerCase())
+    ),
+    stamp,
+    src
+  };
 }
 
 async function load(manual) {
@@ -2243,16 +2245,13 @@ async function load(manual) {
 
     const app = $('#app'); if (app) app.remove();
     $$('.chart').forEach(c => resizeObs.observe(c));
-    status(src.kind === 'csv' ? 'ok' : 'warn',
-      `${src.label} · ${num(rows.length)} leads through ${dlabel(state.maxDate)}`);
-    $('#status').title = (src.kind === 'csv' ? 'Fetched from Redash ' : 'Snapshot published ') +
-      state.fetchedAt.toLocaleString();
+    status('ok', `${src.label} · ${num(rows.length)} leads through ${dlabel(state.maxDate)}`);
+    $('#status').title = `${src.label} loaded ${state.fetchedAt.toLocaleString()}`;
     setTab(state.tab);
   } catch (err) {
     status('err', 'Data unavailable');
     banner(`<strong>No data source could be reached.</strong> ${String(err.message || err)}<br>
-      <span class="small">The page tries the local Redash proxy first, then the published JSON snapshot.
-      Check your connection (VPN for Redash) and hit Refresh data.</span>`);
+      <span class="small">Confirm that the NuBrakes analytics feed is available, then reload the dashboard.</span>`);
     const app = $('#app'); if (app) app.innerHTML = '';
   }
 }
